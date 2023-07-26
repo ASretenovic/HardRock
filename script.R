@@ -152,3 +152,108 @@ df$Band <- "AC/DC"
 # switch positions of the columns Band and Writers
 df <- df[,c(1,6,3,4,5,2)]
 
+
+
+#######################################################################################
+# loading all albums to get data about Song duration and Track number
+#######################################################################################
+
+# adding columns Track_Number and Song_Duration
+df$Track_Number <- NA
+df$Song_Duration <- NA
+
+# links to the album data
+
+# Albums: High Voltage, T.N.T. , Dirty deeds done dirt cheap, Let There Be Rock, Powerage,
+# Highway to Hell, Back in Black, For Those About to Rock We Salute You, FLick of the Switch
+# Fly on the Wall, Blow up your video, The Razors Edge,Ballbreaker, Stiff Upper Lip
+# Black Ice, Rock or Bust, Power Up, If You Want Blood You've Got It, AC/DC Live,
+# Live at River Plate, Who Made Who,Backtracks
+albums_links <- c("https://www.allmusic.com/album/high-voltage-mw0000188976",
+                  "https://www.allmusic.com/album/tnt-mw0000599239",
+                  "https://www.allmusic.com/album/dirty-deeds-done-dirt-cheap-mw0000649804",
+                  "https://www.allmusic.com/album/let-there-be-rock-mw0000188896",
+                  "https://www.allmusic.com/album/powerage-mw0000194999",
+                  "https://www.allmusic.com/album/highway-to-hell-mw0000649805",
+                  "https://www.allmusic.com/album/back-in-black-mw0000188862",
+                  "https://www.allmusic.com/album/for-those-about-to-rock-we-salute-you-mw0000188895",
+                  "https://www.allmusic.com/album/flick-of-the-switch-mw0000188975",
+                  "https://www.allmusic.com/album/fly-on-the-wall-mw0000192737",
+                  "https://www.allmusic.com/album/blow-up-your-video-mw0000198970",
+                  "https://www.allmusic.com/album/the-razors-edge-mw0000690074",
+                  "https://www.allmusic.com/album/ballbreaker-mw0000175703",
+                  "https://www.allmusic.com/album/stiff-upper-lip-mw0000053121",
+                  "https://www.allmusic.com/album/black-ice-mw0000797626",
+                  "https://www.allmusic.com/album/rock-or-bust-mw0002762127#:~:text=Rock%20or%20Bust%2C%20the%20group's,AC%2FDC%20have%20ever%20released.",
+                  "https://www.allmusic.com/album/power-up-mw0003437002",
+                  "https://www.allmusic.com/album/if-you-want-blood-youve-got-it-mw0000192738#:~:text=If%20You%20Want%20Blood%20You've%20Got%20It%20Review&text=Few%20others%20could%20match%20the,and%20memorable%2C%20riffs%20and%20grooves.",
+                  "https://www.allmusic.com/album/live-mw0000616074",
+                  "https://www.allmusic.com/album/live-at-river-plate-mw0002423204",
+                  "https://www.allmusic.com/album/who-made-who-mw0000649806",
+                  "https://www.allmusic.com/album/backtracks-mw0001777691"
+)
+
+
+# processing data related to albums 
+for (i in 1:length(albums_links)) {
+  page <- read_html(albums_links[i])
+  album <-  html_table(page, fill = TRUE)[[1]]
+  
+  # select valid columns and rename them
+  album <- album[,c(2,3,5)]
+  colnames(album) <- c("Track Number","Title","Song Duration")
+  album[album == ""] <- NA
+  
+  # cleaning column Title
+  album$Title <- gsub("\\s+", " ",album$Title)
+  album$Title <- gsub("\n", "", album$Title) 
+  album$"Title" <- gsub("/.*", "", album$"Title")
+  
+  # removing Composer values from Title column
+  composers <- c("Bon Scott", "Angus Young", "Malcolm Young", "Chuck Berry", "Brian Johnson")
+  for (composer in composers) {
+    album$Title <- gsub(composer, "", album$Title)
+  }
+  
+  # select all song titles from the album
+  songs <- album$Title
+  
+  # iterate through each song title from the album and find Track Number i Song Duration data
+  for (i in 1:length(songs)) {
+    indeks <- which(tolower(gsub("\\s+", "", df$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
+    df[indeks,]$Track_Number <- album[i,]$`Track Number`
+    df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+  }
+  
+}
+
+# imam 14 pesama za koje mi fali Song_Duration i Track_Number
+sum(is.na(df$Track_Number))
+
+
+
+#########################################################################################
+# load data about record labels
+#########################################################################################
+
+# link to the record label data 
+url <- "https://www.allmusic.com/artist/ac-dc-mn0000574772/discography"
+
+# load record label data and select valid columns
+page <- read_html(url)
+record_label <-  html_table(page, fill = TRUE)[[1]]
+record_label <- record_label[-c(1,2,6,7,8)]
+
+# rename some albums so that names match with df$Album_Name
+record_label$Album <-  gsub("The Razor's Edge", "The Razors Edge", record_label$Album)
+record_label$Album <-  gsub("Live", "AC/DC Live", record_label$Album)
+
+# add Record_Label column
+df$Record_Label <- NA
+
+# iterate through each album title and find Record Label
+for (i in 1:length(record_label$Album)) {
+  indeks <- which(tolower(gsub("\\s+", "", df$Album_Name))== tolower(gsub("\\s+", "", record_label$Album[i])))
+  df[indeks,]$Record_Label<- record_label[i,]$Label
+}
+
