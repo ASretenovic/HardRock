@@ -963,4 +963,26 @@ for(i in 1:3){
 }
 
 
+#########################################################################################
+# load data about record labels
+#########################################################################################
+
+# link to the record label data 
+url <- "https://www.allmusic.com/artist/iron-maiden-mn0000098465/discography"
+
+# load record label data and select valid columns
+page <- read_html(url)
+record_label <-  html_table(page, fill = TRUE)[[1]]
+record_label <- record_label[-c(1,2,6,7,8)]
+
+# add Record_Label column
+df$Record_Label <- NA
+
+# iterate through each album title and find Record Label
+for (i in 1:length(record_label$Album)) {
+  indeks <- which(tolower(gsub("\\s+", "", df$Album_Name))== tolower(gsub("\\s+", "", record_label$Album[i])))
+  df[indeks,]$Record_Label<- record_label[i,]$Label
+}
+
+
 
