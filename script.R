@@ -736,3 +736,231 @@ df$Certifications[df$Certifications == ""] <- '-'
 
 acdc <- df
 
+
+
+###################################################################################################################
+###################################################################################################################
+##                                          Iron Maiden
+###################################################################################################################
+###################################################################################################################
+
+
+########################################################################################
+# loading initial data about Song titles, Albums and Writers and Years
+########################################################################################
+
+# define data source url (Wikipedia)
+url <- "https://en.wikipedia.org/wiki/List_of_songs_recorded_by_Iron_Maiden"
+
+# load html page 
+page <- read_html(url)
+
+# load all the tables from the page
+tables <- page %>% html_nodes("table.wikitable.sortable")
+
+# select first table and convert it to data frame
+table <- tables[[1]]
+df <-  html_table(table, fill = TRUE)  
+str(df)
+
+# remove last column
+df$Ref. <- NULL
+
+# change column names
+colnames(df) <- c("Song_Title", "Writers", "Album_Name", "Year_of_First_Release")
+
+# remove "" from Song_Title column
+df$Song_Title <-  gsub("\"", "", df$Song_Title)
+
+# remove "" from Album_Name column
+df$Album_Name <-  gsub( "\\\\", "", df$Album_Name)
+df$Album_Name <-  gsub("\"", "", df$Album_Name)
+
+# add column Single
+df$Single <- "No"
+str(df)
+
+# find rows that contain † value in the column Song_Title and mark that rows as Singles
+rows_with_plus <- grep("†", df$Song_Title)
+df$Single[rows_with_plus] <- "Yes"
+df$Single <- as.factor(df$Single)
+
+# remove † value from the Song_Title column
+df$Song_Title <-  gsub("†", "", df$Song_Title)
+
+df$Song_Title <- sub("\\[.*","",df$Song_Title)
+
+str(df)
+
+#remove ‡ value from Wruters column
+df$Writers<-  gsub("‡", "", df$Writers)
+
+df$Writers <- sub("\\[.*","",df$Writers)
+
+str(df)
+
+# Format Writers column so that names are separated with ","
+df$Writers <- sapply(df$Writers, function(x){gsub("(?<=[a-z])(?=[A-Z])", ", ", x, perl = TRUE)})
+
+
+# Cleaning and standardizing the album names --------------------
+
+length(unique(df$Album_Name))
+unique(df$Album_Name)
+
+# add column Band
+df$Band <- "Iron Maiden"
+
+# switch positions of the columns Band and Writers
+df <- df[,c(1,6,3,4,5,2)]
+
+
+
+#######################################################################################
+# loading all albums to get data about Song duration and Track number
+#######################################################################################
+
+# adding columns Track_Number and Song_Duration
+df$Track_Number <- NA
+df$Song_Duration <- NA
+
+# links to the album data
+
+# Albums: Iron Maiden, Killers, The Number of the Beast, Piece of Mind, Powerslave, 
+# The X factor, Fear of the Dark, Somewhere in time, Virtual XI, No Prayer for the Dying,
+# A Matter of Life and Death, Brave New World, Seventh Son of a Seventh Son, 
+# Running Free, Can I Play With Madness, Fear of the Dark, Dance to Death, 
+# The Final Frontier, Be Quick or Be Dead, Brave New World, The Book of Souls,
+# The Trooper, Senjitsu, Different World, From Here to Eternity, Flight of Icarus
+# Woman in Uniform, Sranger in Strange Land, Aces High, Rainmaker, @ Minutes To Midnight, 
+# Wasted Years, Re-Machined: A Tribute to Deep Purple's Machine Head, Run to the Hills, Beast of the Beast
+
+albums_links <- c("https://www.allmusic.com/album/iron-maiden-mw0000198284",
+                  "https://www.allmusic.com/album/killers-mw0000601464",
+                  "https://www.allmusic.com/album/the-number-of-the-beast-mw0000044718",
+                  "https://www.allmusic.com/album/piece-of-mind-mw0000045853",
+                  "https://www.allmusic.com/album/powerslave-mw0000190289",
+                  "https://www.allmusic.com/album/the-x-factor-mw0000645867",
+                  "https://www.allmusic.com/album/fear-of-the-dark-mw0000073138",
+                  "https://www.allmusic.com/album/somewhere-in-time-mw0000650285",
+                  "https://www.allmusic.com/album/virtual-xi-mw0000597969",
+                  "https://www.allmusic.com/album/no-prayer-for-the-dying-mw0000204748",
+                  "https://www.allmusic.com/album/a-matter-of-life-and-death-mw0000542236",
+                  "https://www.allmusic.com/album/brave-new-world-mw0000605881",
+                  "https://www.allmusic.com/album/seventh-son-of-a-seventh-son-mw0000195384",
+                  "https://www.allmusic.com/album/running-free-mw0001890505",
+                  "https://www.allmusic.com/album/can-i-play-with-madness-mw0000976622",
+                  "https://www.allmusic.com/album/fear-of-the-dark-mw0000073138",
+                  "https://www.allmusic.com/album/dance-of-death-mw0000598895",
+                  "https://www.allmusic.com/album/the-final-frontier-mw0002011126",
+                  "https://www.allmusic.com/album/be-quick-or-be-dead-live-mw0002309866",
+                  "https://www.allmusic.com/album/brave-new-world-mw0000605881",
+                  "https://www.allmusic.com/album/the-book-of-souls-mw0002855793",
+                  "https://www.allmusic.com/album/the-trooper-mw0000711438",
+                  "https://www.allmusic.com/album/senjutsu-mw0003559950",
+                  "https://www.allmusic.com/album/different-world-2-track-single--mw0001515298",
+                  "https://www.allmusic.com/album/from-there-to-eternity-mw0000078140",
+                  "https://www.allmusic.com/album/flight-of-icarus-mw0000974202",
+                  "https://www.allmusic.com/album/women-in-uniform-mw0001230984",
+                  "https://www.allmusic.com/album/stranger-in-a-strange-land-mw0000907623",
+                  "https://www.allmusic.com/album/aces-high-mw0000857941",
+                  "https://www.allmusic.com/album/rainmaker-mw0000464168",
+                  "https://www.allmusic.com/album/2-minutes-to-midnight-mw0000973210",
+                  "https://www.allmusic.com/album/wasted-years-mw0002747177",
+                  "https://www.allmusic.com/album/re-machined-a-tribute-to-deep-purples-machine-head-mw0002410805",
+                  "https://www.allmusic.com/album/run-to-the-hills-mw0000532086",
+                  "https://www.allmusic.com/album/the-best-of-the-beast-mw0000082114"
+)
+
+
+unique(df$Writers)
+
+
+# rename some songs so that titles match
+# Alexander the Great (356-323 B.C.)
+df[9,]$Song_Title <- "Alexander the Great (356-323 B.C.)"
+
+# processing data related to albums 
+for (i in 1:length(albums_links)) {
+  page <- read_html(albums_links[i])
+  album <-  html_table(page, fill = TRUE)[[1]]
+  
+  # select valid columns and rename them
+  album <- album[,c(2,3,5)]
+  colnames(album) <- c("Track Number","Title","Song Duration")
+  album[album == ""] <- NA
+  
+  # cleaning column Title
+  album$Title <- gsub("\\s+", " ",album$Title)
+  album$Title <- gsub("\n", "", album$Title) 
+  album$"Title" <- gsub("/.*", "", album$"Title")
+  
+  # removing Composer values from Title column
+  composers <- c("Steve Harris", "Bruce Dickinson", "Blaze Bayley", "Janick Gers",
+                 "Adrian Smith", "Dave Murray", "Phil Mogg", "Paul Rodgers", "Andy Fraser",
+                 "Thijs van Leer", "Jan Akkerman", "Ronnie Montrose", "Pete Townshend",
+                 "Steve Barnacle", "Derek O'Neil", "Iron Maiden", "Del Bromham", 
+                 "Jimmy Page", "John Paul Jones", "John Bonham", "Ian Anderson",
+                 "Clive Burr", "Michael Schenker", "Burke Shelley", "Tony Bourge",
+                 "Ronnie Montrose", "Steve Barnacle", "Derek O'Neil", "David Murray")
+  
+  for (composer in composers) {
+    album$Title <- gsub(composer, "", album$Title)
+  }
+  
+  # select all song titles from the album
+  songs <- album$Title
+  
+  # iterate through each song title from the album and find Track Number i Song Duration data
+  for (i in 1:length(songs)) {
+    indeks <- which(tolower(gsub("\\s+", "", df$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
+    df[indeks,]$Track_Number <- album[i,]$`Track Number`
+    df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+  }
+  
+}
+
+# getting song duration and track number data for some songs from Wikipedia
+albums_links <- c(
+  "https://en.wikipedia.org/wiki/Senjutsu_(album)#Track_listing",
+  "https://en.wikipedia.org/wiki/The_Book_of_Souls#Track_listing",
+  "https://en.wikipedia.org/wiki/Death_on_the_Road#Track_listing"
+)
+
+for(i in 1:3){
+  page <- read_html(albums_links[i])
+  
+  album <- page %>%
+    html_nodes(".track-listing") %>%
+    html_table(fill = TRUE) %>%
+    .[[2]]
+  
+  # select valid columns and rename them
+  album <- album[-6,c(1,2,4)]
+  colnames(album) <- c("Track Number","Title","Song Duration")
+  album[album == ""] <- NA
+  
+  
+  # cleaning column Title
+  album$Title <- gsub("\"", "", album$Title)
+  album$Title <- gsub("\\s+", " ",album$Title)
+  album$Title <- gsub("\n", "", album$Title) 
+  album$"Title" <- gsub("/.*", "", album$"Title")
+  
+  
+  album$`Track Number` <- gsub("\\.", "", album$`Track Number`)
+  album$`Track Number` <- as.numeric(album$`Track Number`)
+  
+  # select all song titles from the album
+  songs <- album$Title
+  
+  # iterate through each song title from the album and find Track Number i Song Duration data
+  for (i in 1:length(songs)) {
+    indeks <- which(tolower(gsub("\\s+", "", df$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
+    df[indeks,]$Track_Number <- album[i,]$`Track Number`
+    df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+  }
+}
+
+
+
