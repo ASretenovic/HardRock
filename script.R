@@ -986,3 +986,113 @@ for (i in 1:length(record_label$Album)) {
 
 
 
+########################################################################################
+# Add audio features from Spotify playlist
+########################################################################################
+
+library(spotifyr)
+
+# set API keys to authenticate the R session with Spotify API
+Sys.setenv(SPOTIFY_CLIENT_ID = "e1707a9784094b098e6c302f4a6222b9")
+Sys.setenv(SPOTIFY_CLIENT_SECRET = "058710aee06347fea415a46f5f2bc883")
+
+# generate access token
+access_token <- get_spotify_access_token()
+
+# playlist url
+playlist_url <- "https://open.spotify.com/playlist/1VoTGn2zY5fLFX14RrL6qG"
+
+# extract playlist ID from playlist url
+playlist_id <- sub("^.+/([[:alnum:]]+)$", "\\1", playlist_url)
+
+# initialize an empty data frame to store all tracks from the playlist
+all_tracks <- NULL
+
+# set the starting offset
+offset <- 0
+# set the number of tracks to be fetched in a single API call
+limit <- 50
+
+# a repeat loop to fetch tracks page by page 
+repeat {
+  tracks <- get_playlist_tracks(playlist_id, limit = limit, offset = offset)
+  
+  # loop exit condition
+  if (length(tracks) == 0) {
+    break
+  }
+  
+  tracks_df <- as.data.frame(tracks)
+  all_tracks <- bind_rows(all_tracks, tracks_df)
+  
+  # update the offset to fetch the next page
+  offset <- offset + limit
+}
+
+# extracting track IDs and track names from the 'all_tracks'
+track_ids <- all_tracks$track.id
+track_name <- all_tracks$track.name
+
+# create an empty list to store audio features for all tracks
+all_audio_features <- list()
+
+# iterating through each track ID to fetch audio features
+for (track_id in track_ids) {
+  
+  audio_feature <- get_track_audio_features(track_id)
+  
+  track <- get_track(track_id)
+  track_name <- track$name
+  
+  audio_feature$Track_ID <- track_id
+  audio_feature$Track <- track_name
+  all_audio_features[[track_id]] <- audio_feature
+}
+
+
+all_audio_features_df <- do.call(rbind, all_audio_features)
+
+# adding a new column Row to the all_audio_features_df
+all_audio_features_df$Row <- seq_len(nrow(all_audio_features_df))
+
+# cleaning Track column
+all_audio_features_df$Track <- toupper(all_audio_features_df$Track)
+all_audio_features_df$Track <- sub(" -.*", "", all_audio_features_df$Track)
+all_audio_features_df$Track <- trimws(all_audio_features_df$Track)
+
+# creating new columns with NA values in df
+df$Key <- NA
+df$Mode <- NA
+df$Loudness <- NA
+df$Tempo <- NA
+
+df$Acousticness <- NA
+df$Danceability <- NA
+df$Energy <- NA
+df$Instrumentalness <- NA
+df$Liveness <- NA
+df$Speechiness <- NA
+df$Valence <- NA
+
+songs <- all_audio_features_df$Track
+
+# ooping through each song and adding attributes to that song in df
+for (i in 1:length(all_audio_features_df$id)) {
+  
+  #f inding the row index in the main data frame df based on song title
+  indeks <- which(toupper(trimws(df$Song_Title)) == songs[i])
+  
+  df[indeks,]$Key <- all_audio_features_df[i,]$key
+  df[indeks,]$Mode <- all_audio_features_df[i,]$mode
+  df[indeks,]$Loudness <- all_audio_features_df[i,]$loudness
+  df[indeks,]$Tempo <- all_audio_features_df[i,]$tempo
+  
+  df[indeks,]$Acousticness <- all_audio_features_df[i,]$acousticness
+  df[indeks,]$Danceability <- all_audio_features_df[i,]$danceability
+  df[indeks,]$Energy <- all_audio_features_df[i,]$energy
+  df[indeks,]$Instrumentalness <- all_audio_features_df[i,]$instrumentalness
+  df[indeks,]$Liveness <- all_audio_features_df[i,]$liveness
+  df[indeks,]$Speechiness <- all_audio_features_df[i,]$speechiness
+  df[indeks,]$Valence <- all_audio_features_df[i,]$valence
+  
+}
