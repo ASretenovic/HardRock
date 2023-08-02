@@ -749,6 +749,8 @@ acdc <- df
 # loading initial data about Song titles, Albums and Writers and Years
 ########################################################################################
 
+df <- data.frame()
+
 # define data source url (Wikipedia)
 url <- "https://en.wikipedia.org/wiki/List_of_songs_recorded_by_Iron_Maiden"
 
@@ -1076,10 +1078,10 @@ df$Valence <- NA
 
 songs <- all_audio_features_df$Track
 
-# ooping through each song and adding attributes to that song in df
+# looping through each song and adding attributes to that song in df
 for (i in 1:length(all_audio_features_df$id)) {
   
-  #f inding the row index in the main data frame df based on song title
+  #finding the row index in the main data frame df based on song title
   indeks <- which(toupper(trimws(df$Song_Title)) == songs[i])
   
   df[indeks,]$Key <- all_audio_features_df[i,]$key
@@ -1096,3 +1098,156 @@ for (i in 1:length(all_audio_features_df$id)) {
   df[indeks,]$Valence <- all_audio_features_df[i,]$valence
   
 }
+
+
+
+########################################################################################
+# Add data about genres, styles, moods and themes
+########################################################################################
+
+# define all the pages links
+pages_url <- c("https://www.allmusic.com/artist/iron-maiden-mn0000098465/songs/all",
+               "https://www.allmusic.com/artist/iron-maiden-mn0000098465/songs/all/2",
+               "https://www.allmusic.com/artist/iron-maiden-mn0000098465/songs/all/3",
+               "https://www.allmusic.com/artist/iron-maiden-mn0000098465/songs/all/4",
+               "https://www.allmusic.com/artist/iron-maiden-mn0000098465/songs/all/5",
+               "https://www.allmusic.com/artist/iron-maiden-mn0000098465/songs/all/6",
+               "https://www.allmusic.com/artist/iron-maiden-mn0000098465/songs/all/7",
+               "https://www.allmusic.com/artist/iron-maiden-mn0000098465/songs/all/8"
+               
+)
+
+# create an empty vector to store song links
+all_songs_links <- c()
+
+# loop through each page url and extract song links
+for(i in 1:length(pages_url)){
+  page <- read_html(pages_url[i])
+  
+  # extract the table data containing song links
+  table_data <- page %>%
+    html_nodes("table")
+  
+  tab <- table_data %>%
+    html_nodes("tbody") 
+  
+  tab1 <- tab  %>%
+    html_nodes("div.title")
+  
+  tab2 <- tab1 %>%
+    html_nodes("a") 
+  
+  href_content <- tab2 %>%
+    html_attr("href")
+  
+  # append the extracted song links to the 'all_songs_links' vector
+  all_songs_links <- c(all_songs_links, href_content)
+}
+
+# delete invalid links
+all_songs_links[grepl("^/song/", all_songs_links)] <- NA
+all_songs_links[grepl("/artist/", all_songs_links)] <- NA
+all_songs_links <- all_songs_links[complete.cases(all_songs_links)]
+
+
+# create data frame to store attributes
+song_data <- data.frame(
+  Song_Title = character(),
+  Genres = character(),
+  Styles = character(),
+  Moods = character(),
+  Themes = character(),
+  stringsAsFactors = FALSE
+)
+
+
+# extract attributes for every song
+for(i in 1:length(all_songs_links)){
+  # loading content page
+  song_page_html <- read_html(all_songs_links[i])
+  
+  # retrieving song title
+  song_title <- ""
+  song_title <- song_page_html %>%
+    html_nodes("h1.song-title") %>% html_text()
+  
+  # clean the string to extract only the title and add song_title to dataset
+  song_title <- gsub("^\\s+|\\s+$", "", song_title)
+  song_title <- gsub("\\n", "", song_title)
+  
+  song_data[i,]$Song_Title <- song_title
+  
+  
+  # adding Genres -------------------------------------------------------
+  tab <- song_page_html %>%
+    html_nodes("div.song_genres div.middle") %>%
+    head(1)
+  
+  attribute <- tab %>%
+    html_nodes("a") %>% html_text()
+  attribute
+  
+  # clean the string attribute containing genres
+  cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
+  cleaned_string <- paste(cleaned_string, collapse = ", ")
+  song_data[i,]$Genres <- cleaned_string
+  
+  # adding Styles --------------------------------------------------------
+  tab <- song_page_html %>%
+    html_nodes("div.song_styles div.middle") %>%
+    head(1)
+  
+  attribute <- tab %>%
+    html_nodes("a") %>% html_text()
+  attribute
+  
+  # clean the string attribute containing styles
+  cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
+  cleaned_string <- paste(cleaned_string, collapse = ", ")
+  song_data[i,]$Styles <- cleaned_string
+  
+  # adding Moods ---------------------------------------------------------
+  tab <- song_page_html %>%
+    html_nodes("div.song_moods div.middle") %>%
+    head(1)
+  
+  attribute <- tab %>%
+    html_nodes("a") %>% html_text()
+  
+  # clean the string attribute containing moods
+  cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
+  cleaned_string <- paste(cleaned_string, collapse = ", ")
+  song_data[i,]$Moods <- cleaned_string
+  
+  # adding Themes -------------------------------------------------------
+  tab <- song_page_html %>%
+    html_nodes("div.song_themes div.middle") %>%
+    head(1)
+  
+  attribute <- tab %>%
+    html_nodes("a") %>% html_text()
+  
+  # clean the string attribute containing themes
+  cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
+  cleaned_string <- paste(cleaned_string, collapse = ", ")
+  song_data[i,]$Themes <- cleaned_string
+  
+}
+
+# replace "" fields with NA
+song_data$Styles[song_data$Styles == ""] <- NA
+song_data$Genres[song_data$Genres == ""] <- NA
+song_data$Moods[song_data$Moods == ""] <- NA
+song_data$Themes[song_data$Themes == ""] <- NA
+
+song_data <- song_data[complete.cases(song_data$Genres),]
+
+# extract the rows with values in Styles, Genres, Themes or Moods
+song_data <- song_data[apply(song_data[, c("Styles", "Genres", "Themes", "Moods")], 1, function(x) any(!is.na(x))), ]
+
+# remove duplicates
+duplicates <- duplicated(song_data$Song_Title)
+song_data <- song_data[!duplicates, ]
+
+# add Genres, Styles, Moods and Themes to df
+df <- left_join(df, song_data, by = "Song_Title")
