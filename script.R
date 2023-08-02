@@ -1251,3 +1251,88 @@ song_data <- song_data[!duplicates, ]
 
 # add Genres, Styles, Moods and Themes to df
 df <- left_join(df, song_data, by = "Song_Title")
+
+
+########################################################################################
+# Add data about UK Charts performance
+########################################################################################
+
+# define the URL of the page containing data about UK charts
+url <- "https://www.officialcharts.com/artist/23494/iron-maiden/"
+
+# read the HTML content of the webpage
+page <- read_html(url)
+
+# extract all 'div' elements with class "chart-content"
+page %>%
+  html_nodes("div.chart-content") %>%
+  head()
+
+# extract the first 'div' element with class "chart-content"
+first_chart_content <- page %>%
+  html_nodes("div.chart-content") %>%
+  head(1)
+
+# extract all 'div' elements with class "chart-items" from first_chart_content
+first_chart_items <- first_chart_content %>%
+  html_nodes("div.chart-items")
+
+# extract all 'div' elements with class "chart-item"
+first_chart_item <- first_chart_content %>%
+  html_nodes("div.chart-item")
+
+# extract all 'div' elements with class "chart-item-content"
+first_chart_item_content <- first_chart_content %>%
+  html_nodes("div.chart-item-content")
+
+# extract song position and number of weeks
+first_chart_item_content_desc <- first_chart_content %>%
+  html_nodes("div.description") %>%
+  html_text()
+
+first_chart_item_content_desc <- gsub("IRON MAIDEN", ", ", first_chart_item_content_desc)
+
+# format first_chart_item_content_desc
+first_chart_item_content_desc <- gsub("Iron Maiden", ", ", first_chart_item_content_desc)
+
+# Extract debut dates on the UK Charts for each song
+first_chart_item_content_date <- first_chart_content %>%
+  html_nodes("time.date") %>%
+  html_text()
+
+# merge song positions, number of weeks and debut dates
+uk_charts_data <- paste(first_chart_item_content_desc, first_chart_item_content_date, sep = ", ")
+uk_charts_data
+uk_charts_data <- strsplit(uk_charts_data, ", ")
+uk_charts_data
+
+# convert uk_charts_data to data frame and format
+df_british_charts <- data.frame(matrix(unlist(uk_charts_data), ncol = 4, byrow = TRUE))
+
+# set column names and format
+colnames(df_british_charts) <- c("Song_Title", "Peak", "Weeks", "Date")
+df_british_charts$Peak <- str_replace(df_british_charts$Peak, "Peak: ", "")
+df_british_charts$Weeks <- str_replace(df_british_charts$Weeks, "Weeks: ", "")
+
+# ad uk charts data to df ----------------
+
+# add columns British_Charts, UK_Debut_Date, UK_Peak_Pos and UK_Chart_Weeks
+df$British_Charts <- 'No'
+df$UK_Debut_Date <- NA
+df$UK_Peak_Pos <- NA
+df$UK_Chart_Weeks <- NA
+
+# extract song titles from the df_british_charts
+songs <- df_british_charts$Song_Title
+
+# loop through each song title and add uk charts data to df
+for (i in 1:length(songs)) {
+  # find the index of the song title in the df 
+  indeks <- which(str_to_upper((trimws(df$Song_Title))) == songs[i])
+  
+  df[indeks,]$British_Charts <- 'Yes'
+  df[indeks,]$UK_Debut_Date <- df_british_charts[i,]$Date
+  df[indeks,]$UK_Peak_Pos <- df_british_charts[i,]$Peak
+  df[indeks,]$UK_Chart_Weeks <- df_british_charts[i,]$Weeks
+}
+
