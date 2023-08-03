@@ -1469,3 +1469,98 @@ iron_maiden <- df
 
 # merging AC/DC and Iron Maiden into single data frame
 hard_rock <- rbind(acdc, iron_maiden)
+
+
+
+
+
+#########################################################################################
+########################################################################################
+#                              METALLICA
+########################################################################################
+#######################################################################################
+
+
+
+
+
+
+
+
+
+
+
+# install.packages("rvest")
+library(rvest)
+
+#install.packages("magrittr")
+library(magrittr)
+
+# install.packages("stringr")
+library(stringr)
+
+# install.packages("dplyr")
+library(dplyr)
+
+########################################################################################
+# loading initial data about Song titles, Albums and Writers and Years
+########################################################################################
+
+# define data source url (Wikipedia)
+url <- "https://en.wikipedia.org/wiki/List_of_songs_recorded_by_Metallica"
+
+# load html page 
+page <- read_html(url)
+
+# load all the tables from the page
+tables <- page %>% html_nodes("table.wikitable.sortable")
+
+# select first table and convert it to data frame
+table <- tables[[1]]
+df <-  html_table(table, fill = TRUE)  
+str(df)
+
+# remove invalid columns and rows
+df$Ref. <- NULL
+df$`Original artist` <- NULL
+df[c(2,20,41,43,111,116,119,131,157,162),] <- NA
+
+# change column names
+colnames(df) <- c("Song_Title", "Writers", "Album_Name", "Year_of_First_Release")
+df <- df[complete.cases(df$Song_Title),]
+
+# remove "" from Song_Title column
+df$Song_Title <-  gsub("\"", "", df$Song_Title)
+df$Song_Title <- gsub("\\(with Lou Reed\\)", "", df$Song_Title)
+
+# add column Single
+df$Single <- "No"
+str(df)
+
+# find rows that contain † value in the column Song_Title and mark that rows as Singles
+rows_with_plus <- grep("†", df$Song_Title)
+df$Single[rows_with_plus] <- "Yes"
+df$Single <- as.factor(df$Single)
+
+# remove † value from the Song_Title column
+df$Song_Title <-  gsub("†", "", df$Song_Title)
+
+df$Song_Title <- sub("\\[.*","",df$Song_Title)
+str(df)
+
+# Format Writers column so that names are separated with ","
+df$Writers <- sapply(df$Writers, function(x){gsub("(?<=[a-z])(?=[A-Z])", ", ", x, perl = TRUE)})
+
+# remove ‡ sign from Writers column
+df$Writers <-  gsub("‡", "", df$Writers)
+
+# remove "" from Album_Name column
+df$Album_Name <-  gsub("\"", "", df$Album_Name)
+
+# add column Band
+df$Band <- "Metallica"
+
+# switch positions of the columns Band and Writers
+df <- df[,c(1,6,3,4,5,2)]
+
+
