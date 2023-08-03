@@ -1564,3 +1564,286 @@ df$Band <- "Metallica"
 df <- df[,c(1,6,3,4,5,2)]
 
 
+#######################################################################################
+# loading all albums to get data about Song duration and Track number
+#######################################################################################
+
+# adding columns Track_Number and Song_Duration
+df$Track_Number <- NA
+df$Song_Duration <- NA
+
+# links to the album data
+
+# Albums (from AllMusic) : Kill 'Em All, Ride the Lightning, Master of Puppets, 
+# ...And Justice for All, Metallica, Load, Reaload, St. Anger, Death Magnetic, Lulu
+# Lulu, Hardwited... to Self-Destruct, Creeping Death, Beyond Magnetic,
+# Garage Inc. , Hero of the Day
+albums_links <- c("https://www.allmusic.com/album/kill-em-all-mw0000651567",
+                  "https://www.allmusic.com/album/ride-the-lightning-mw0000190995",
+                  "https://www.allmusic.com/album/master-of-puppets-mw0000667490",
+                  "https://www.allmusic.com/album/and-justice-for-all-mw0000196917",
+                  "https://www.allmusic.com/album/metallica-mw0000311315",
+                  "https://www.allmusic.com/album/load-mw0000183633",
+                  "https://www.allmusic.com/album/reload-mw0000029057",
+                  "https://www.allmusic.com/album/st-anger-mw0000022895",
+                  "https://www.allmusic.com/album/death-magnetic-mw0000792030",
+                  "https://www.allmusic.com/album/lulu-mw0002223324",
+                  "https://www.allmusic.com/album/hardwiredto-self-destruct-mw0002977037",
+                  "https://www.allmusic.com/album/creeping-death-mw0001031638",
+                  "https://www.allmusic.com/album/beyond-magnetic-mw0002289327",
+                  "https://www.allmusic.com/album/garage-inc-mw0000051667",
+                  "https://www.allmusic.com/album/hero-of-the-day-mw0000988428"
+)
+
+unique(df$Writers)
+
+# processing data related to albums 
+for (i in 1:length(albums_links)) {
+  page <- read_html(albums_links[i])
+  album <-  html_table(page, fill = TRUE)[[1]]
+  
+  # select valid columns and rename them
+  album <- album[,c(2,3,5)]
+  colnames(album) <- c("Track Number","Title","Song Duration")
+  album[album == ""] <- NA
+  
+  # cleaning column Title
+  album$Title <- gsub("\\s+", " ",album$Title)
+  album$Title <- gsub("\n", "", album$Title) 
+  album$"Title" <- gsub("/.*", "", album$"Title")
+  
+  # removing Composer values from Title column
+  composers <- c("James Hetfield","Lars Ulrich","Kirk Hammett","Robert Trujillo", 
+                 "Bob Rock","Cliff Burton","Brian Tatler","Sean Harris","Joe Bouchard",
+                 "Albert Bouchard","Sandy Pearlman","Jason Newsted","Ian Jones",
+                 "Jim Sirotto","Brian Ross","Lou Reed","Dave Mustaine","Ray Phillips",
+                 "Joey Ramone","Johnny Ramone","Dee Dee Ramone","Tommy Ramone",
+                 "Burke Shelley","Tony Bourge","Glenn Danzig",
+                 "Lemmy Kilmister","Eddie Clarke","Phil Taylor","Mick Farren",
+                 "Garry Maloney","Kevin Morris","Tony Roberts","Roy Wainwright",
+                 "Vivian Campbell","Trevor Fleming","Raymond Haller","Davy Bates",
+                 "Nick Cave","King Diamond","Hank Shermann","Peter Purtill",
+                 "Lemmy Kilmister","John Mortimer","Ronnie Van Zant", "Allen Collins",
+                 "Tony Iommi","Ozzy Osbourne","Geezer Butler","Bill Ward",
+                 "Nick Kulmer","Chris Exall", "Clive Blake","Bob Seger",
+                 "Jaz Coleman","Geordie Walker","Martin Glover","Paul Ferguson",
+                 "Kasseem Dean","Jeffrey Atkins","Traditional","Metallica"
+  )
+  for (composer in composers) {
+    album$Title <- gsub(composer, "", album$Title)
+  }
+  
+  # select all song titles from the album
+  songs <- album$Title
+  
+  # iterate through each song title from the album and find Track Number i Song Duration data
+  for (i in 1:length(songs)) {
+    indeks <- which(tolower(gsub("\\s+", "", df$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
+    df[indeks,]$Track_Number <- album[i,]$`Track Number`
+    df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+  }
+  
+}
+
+# Some albums have disc 2
+albums_links <- c("https://www.allmusic.com/album/st-anger-mw0000022895",
+                  "https://www.allmusic.com/album/lulu-mw0002223324",
+                  "https://www.allmusic.com/album/hardwiredto-self-destruct-mw0002977037",
+                  "https://www.allmusic.com/album/garage-inc-mw0000051667"
+)
+
+
+
+for (i in 1:length(albums_links)) {
+  page <- read_html(albums_links[i])
+  album <-  html_table(page, fill = TRUE)[[2]]
+  
+  # select valid columns and rename them
+  album <- album[,c(2,3,5)]
+  colnames(album) <- c("Track Number","Title","Song Duration")
+  album[album == ""] <- NA
+  
+  # cleaning column Title
+  album$Title <- gsub("\\s+", " ",album$Title)
+  album$Title <- gsub("\n", "", album$Title) 
+  album$"Title" <- gsub("/.*", "", album$"Title")
+  
+  # removing Composer values from Title column
+  composers <- c("James Hetfield","Lars Ulrich","Kirk Hammett","Robert Trujillo", 
+                 "Bob Rock","Cliff Burton","Brian Tatler","Sean Harris","Joe Bouchard",
+                 "Albert Bouchard","Sandy Pearlman","Jason Newsted","Ian Jones",
+                 "Jim Sirotto","Brian Ross","Lou Reed","Dave Mustaine","Ray Phillips",
+                 "Joey Ramone","Johnny Ramone","Dee Dee Ramone","Tommy Ramone",
+                 "Burke Shelley","Tony Bourge","Glenn Danzig",
+                 "Lemmy Kilmister","Eddie Clarke","Phil Taylor","Mick Farren",
+                 "Garry Maloney","Kevin Morris","Tony Roberts","Roy Wainwright",
+                 "Vivian Campbell","Trevor Fleming","Raymond Haller","Davy Bates",
+                 "Nick Cave","King Diamond","Hank Shermann","Peter Purtill",
+                 "Lemmy Kilmister","John Mortimer","Ronnie Van Zant", "Allen Collins",
+                 "Tony Iommi","Ozzy Osbourne","Geezer Butler","Bill Ward",
+                 "Nick Kulmer","Chris Exall", "Clive Blake","Bob Seger",
+                 "Jaz Coleman","Geordie Walker","Martin Glover","Paul Ferguson",
+                 "Kasseem Dean","Jeffrey Atkins","Traditional","Metallica"
+  )
+  for (composer in composers) {
+    album$Title <- gsub(composer, "", album$Title)
+  }
+  
+  # select all song titles from the album
+  songs <- album$Title
+  
+  # iterate through each song title from the album and find Track Number i Song Duration data
+  for (i in 1:length(songs)) {
+    indeks <- which(tolower(gsub("\\s+", "", df$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
+    df[indeks,]$Track_Number <- album[i,]$`Track Number`
+    df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+  }
+  
+}
+
+
+
+# Albums (from Wikipedia): The $5.98 E.P. – Garage Days Re-Revisited,
+# Until it Sleeps, The Unforgiven
+albums_links <- c(
+  "https://en.wikipedia.org/wiki/The_$5.98_E.P._%E2%80%93_Garage_Days_Re-Revisited",
+  "https://en.wikipedia.org/wiki/Until_It_Sleeps",
+  "https://en.wikipedia.org/wiki/The_Unforgiven_(song)#Track_listing"
+)
+
+# album The $5.98 E.P. – Garage Days Re-Revisited
+page <- read_html(albums_links[1])
+
+album <- page %>%
+  html_nodes(".track-listing") %>%
+  html_table(fill = TRUE) %>%
+  .[[1]]
+
+# select valid columns and rename them
+album <- album[-6,c(1,2,5)]
+colnames(album) <- c("Track Number","Title","Song Duration")
+album[album == ""] <- NA
+
+
+# cleaning column Title
+album$Title <- gsub("\"", "", album$Title)
+album$Title <- gsub("\\s+", " ",album$Title)
+album$Title <- gsub("\n", "", album$Title) 
+album$"Title" <- gsub("/.*", "", album$"Title")
+
+
+album$`Track Number` <- gsub("\\.", "", album$`Track Number`)
+album$`Track Number` <- as.numeric(album$`Track Number`)
+
+# select all song titles from the album
+songs <- album$Title
+
+# iterate through each song title from the album and find Track Number i Song Duration data
+for (i in 1:length(songs)) {
+  indeks <- which(tolower(gsub("\\s+", "", df$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
+  df[indeks,]$Track_Number <- album[i,]$`Track Number`
+  df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+}
+
+
+
+# albums Until it Sleeps and The Unforgiven
+for(i in 2:3){
+  page <- read_html(albums_links[i])
+  
+  album <- page %>%
+    html_nodes(".track-listing") %>%
+    html_table(fill = TRUE) %>%
+    .[[1]]
+  
+  # select valid columns and rename them
+  colnames(album) <- c("Track Number","Title","Song Duration")
+  album[album == ""] <- NA
+  
+  
+  # cleaning column Title
+  album$Title <- gsub("\"", "", album$Title)
+  album$Title <- gsub("\\s+", " ",album$Title)
+  album$Title <- gsub("\n", "", album$Title) 
+  album$"Title" <- gsub("/.*", "", album$"Title")
+  
+  
+  album$`Track Number` <- as.numeric(album$`Track Number`)
+  # select all song titles from the album
+  songs <- album$Title
+  
+  # iterate through each song title from the album and find Track Number i Song Duration data
+  for (i in 1:length(songs)) {
+    indeks <- which(tolower(gsub("\\s+", "", df$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
+    df[indeks,]$Track_Number <- album[i,]$`Track Number`
+    df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+  }
+  
+}
+
+# imam 14 pesama za koje mi fali Track_Number, 26 za koje fali Song_Duration
+sum(is.na(df$Song_Duration))
+
+
+#########################################################################################
+# load data about record labels
+#########################################################################################
+
+# link to the record label data 
+url <- "https://www.allmusic.com/artist/metallica-mn0000446509/discography"
+
+# load record label data and select valid columns
+page <- read_html(url)
+record_label <-  html_table(page, fill = TRUE)[[1]]
+record_label <- record_label[-c(1,2,6,7,8)]
+
+# rename some albums so that names match with df$Album_Name
+record_label$Album <-  gsub("The Razor's Edge", "The Razors Edge", record_label$Album)
+record_label$Album <-  gsub("Live", "AC/DC Live", record_label$Album)
+
+# add Record_Label column
+df$Record_Label <- NA
+
+# iterate through each album title and find Record Label
+for (i in 1:length(record_label$Album)) {
+  indeks <- which(tolower(gsub("\\s+", "", df$Album_Name))== tolower(gsub("\\s+", "", record_label$Album[i])))
+  df[indeks,]$Record_Label<- record_label[i,]$Label
+}
+
+# load record label data for Garage Inc. and The $5.98 E.P.: GarageDays Re-Revisited
+url <- "https://en.wikipedia.org/wiki/Metallica_discography"
+
+xpath_value <- c("/html/body/div[2]/div/div[3]/main/div[3]/div[3]/div[1]/table[4]/tbody",
+                 "/html/body/div[2]/div/div[3]/main/div[3]/div[3]/div[1]/table[8]/tbody")
+
+# load record label data and select valid columns
+page <- read_html(url)
+
+for(i in 1:length(xpath_value)){
+  record_label <-  page %>% html_nodes(xpath = xpath_value[i]) %>% html_table(fill = TRUE) %>% .[[1]]
+  record_label <- record_label[-1,-c(3:10)]
+  record_label$Label <- str_extract(record_label$`Album details`, "(?<=Label: ).*")
+  
+  if(i == 2){
+    record_label$Title[1] <- 'The $5.98 E.P.: GarageDays Re-Revisited'
+  }
+  
+  # iterate through each album title and find Record Label
+  for (i in 1:length(record_label$`Album details`)) {
+    indeks <- which(tolower(gsub("\\s+", "", df$Album_Name))== tolower(gsub("\\s+", "", record_label$Title[i])))
+    df[indeks,]$Record_Label<- record_label[i,]$Label
+  }
+  
+  
+}
+
+# set data about record label manually for some albums
+df$Record_Label[df$Album_Name == "The Unforgiven"] <- 'Elektra'
+df$Record_Label[df$Album_Name == "Creeping Death"] <- 'Megaforce / Elektra'
+df$Record_Label[df$Album_Name == "Until It Sleeps"] <- 'Elektra / Vertigo'
+df$Record_Label[df$Album_Name == "Hero of the Day"] <- 'Elektra / Vertigo'
+
+# remove rows with NA values for Record_Label
+df <- df[complete.cases(df$Record_Label),]
+
+
