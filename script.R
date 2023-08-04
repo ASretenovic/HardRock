@@ -2305,3 +2305,261 @@ for(i in 1:2){
 }
 
 
+#################################################
+# album Love_at_First_Sting
+page <- read_html(album_links[2])
+
+album <- page %>%
+  html_nodes(".track-listing") %>%
+  html_table(fill = TRUE)
+
+# extract data from the first table on the page
+current_table <- album[[1]]  # Get the first table in 'album'
+colnames(current_table) <- c("Track_Number","Song_Title","Writers","Song_Duration")
+current_table[current_table == ""] <- NA
+
+# set Writers column to the 'Klaus Meine'
+current_table[is.na(current_table$Writers),3] <- 'Klaus Meine'
+
+# set album name for all songs in the album
+current_table$Album_Name <- 'Love at First Sting'
+
+# get year of the album release
+year_of_release <- page %>%
+  html_nodes(".plainlist") %>%
+  head(1) %>% html_text()
+
+year <- str_extract(year_of_release, "\\d{4}")
+
+# set year to all songs in the album
+current_table$Year_of_Release <- year
+
+# add album to the scorpions
+scorpions <- rbind(scorpions, current_table)
+
+
+# extract data from the second table on the page
+current_table <- album[[2]]  # Get the first table in 'album'
+colnames(current_table) <- c("Track_Number","Song_Title","Song_Duration")
+current_table[current_table == ""] <- NA
+
+# set Writers column to the 'Klaus Meine'
+current_table$Writers <- 'Klaus Meine'
+
+# set album name for all songs in the album
+current_table$Album_Name <- 'Love at First Sting'
+
+# extract relevant columns
+current_table <- current_table[,c(1,2,4,3,5)]
+
+# get year of the album release
+year_of_release <- page %>%
+  html_nodes(".plainlist") %>%
+  head(1) %>% html_text()
+
+year <- str_extract(year_of_release, "\\d{4}")
+
+# set year to all songs in the album
+current_table$Year_of_Release <- year
+
+# add album to the scorpions
+scorpions <- rbind(scorpions, current_table)
+
+
+#######################################################
+# albums that have columns Track Number,Song Title,Music,Song Duration
+album_links <- c("https://en.wikipedia.org/wiki/Eye_II_Eye",
+                 "https://en.wikipedia.org/wiki/Rock_Believer",
+                 "https://en.wikipedia.org/wiki/Pure_Instinct")
+
+
+# album names
+album_name <- c("Eye II Eye","Rock Believer","Pure Instinct")
+
+# loop through albums and get data
+for(i in 1:length(album_links)){
+  
+  # load page from the link
+  page <- read_html(album_links[i])
+  
+  album <- page %>%
+    html_nodes(".track-listing") %>%
+    html_table(fill = TRUE)
+  
+  # get data for each album
+  while(length(album) > 0){
+    current_table <- album[[1]]  # Get the first table in 'album'
+    current_table <- current_table[,c(1,2,4)]
+    colnames(current_table) <- c("Track_Number","Song_Title","Song_Duration")
+    
+    # set Writers column to the 'Klaus Meine'
+    current_table$Writers <- 'Klaus Meine'
+    current_table[current_table == ""] <- NA
+    
+    # set album name for all songs in the album
+    current_table$Album_Name <- album_name[i]
+    
+    # get year of the album release
+    year_of_release <- page %>%
+      html_nodes(".plainlist") %>%
+      head(1) %>% html_text()
+    
+    year <- str_extract(year_of_release, "\\d{4}")
+    
+    # set year to all songs in the album
+    current_table$Year_of_Release <- year
+    
+    # add album to the scorpions
+    scorpions <- rbind(scorpions, current_table)
+    album <- album[-1]
+  }
+  
+}
+
+
+#########################################
+# albums that have columns Track Number,Song Title,Lyrics,Music,Song Duration
+album_links <- c("https://en.wikipedia.org/wiki/Lovedrive#Track_listing",
+                 "https://en.wikipedia.org/wiki/Animal_Magnetism_(Scorpions_album)",
+                 "https://en.wikipedia.org/wiki/Savage_Amusement",
+                 "https://en.wikipedia.org/wiki/Crazy_World_(Scorpions_album)",
+                 "https://en.wikipedia.org/wiki/Unbreakable_(Scorpions_album)"
+)
+
+
+# album names
+album_name <- c("Lovedrive","Animal Magnetism","Savage Amusement","Crazy World","Unbreakable")
+
+# loop through albums and get data
+for(i in 1:length(album_links)){
+  
+  # load page from the link
+  page <- read_html(album_links[i])
+  
+  album <- page %>%
+    html_nodes(".track-listing") %>%
+    html_table(fill = TRUE)
+  
+  # get data for each album
+  while(length(album) > 0){
+    current_table <- album[[1]]  # Get the first table in 'album'
+    current_table <- current_table[,c(1,2,3,5)]
+    colnames(current_table) <- c("Track_Number","Song_Title","Writers","Song_Duration")
+    current_table[current_table == ""] <- NA
+    
+    # get year of the album release
+    year_of_release <- page %>%
+      html_nodes(".plainlist") %>%
+      head(1) %>% html_text()
+    
+    year <- str_extract(year_of_release, "\\d{4}")
+    
+    # set year to all songs in the album
+    current_table$Year_of_Release <- year
+    
+    # set album name for all songs in the album
+    current_table$Album_Name <- album_name[i]
+    
+    # add album to the scorpions
+    scorpions <- rbind(scorpions, current_table)
+    album <- album[-1]
+  }
+  
+}
+
+
+album_links <- c("https://en.wikipedia.org/wiki/Sting_in_the_Tail",
+                 "https://en.wikipedia.org/wiki/Return_to_Forever_(Scorpions_album)")
+
+
+#######################################
+# Sting in the tail
+
+# read page from the url
+page <- read_html(album_links[1])
+
+album <- page %>%
+  html_nodes(".track-listing") %>%
+  html_table(fill = TRUE)
+
+
+current_table <- album[[1]]  # Get the first table in 'album'
+current_table <- current_table[,c(1,2,3,5)]
+colnames(current_table) <- c("Track_Number","Song_Title","Writers","Song_Duration")
+
+# remove invalid rows
+current_table[current_table == ""] <- NA
+current_table[13,] <- NA
+current_table <- current_table[complete.cases(current_table),]
+
+# set album name for all songs in the album
+current_table$Album_Name <- 'Sting in the tail'
+
+# get year of the album release
+year_of_release <- page %>%
+  html_nodes(".plainlist") %>%
+  head(1) %>% html_text()
+
+year <- str_extract(year_of_release, "\\d{4}")
+
+# set year to all songs in the album
+current_table$Year_of_Release <- year
+
+# add album to the scorpions
+scorpions <- rbind(scorpions, current_table)
+
+###################################################
+# Return to Forever
+page <- read_html(album_links[2])
+
+album <- page %>%
+  html_nodes(".track-listing") %>%
+  html_table(fill = TRUE)
+
+
+current_table <- album[[1]]  # Get the first table in 'album'
+current_table <- current_table[,c(1,2,3,5)]
+colnames(current_table) <- c("Track_Number","Song_Title","Writers","Song_Duration")
+current_table[current_table == ""] <- NA
+current_table[13,] <- NA
+current_table <- current_table[complete.cases(current_table),]
+
+# set album name for all songs in the album
+current_table$Album_Name <- 'Return to Forever'
+
+# get year of the album release
+year_of_release <- page %>%
+  html_nodes(".plainlist") %>%
+  head(1) %>% html_text()
+
+year <- str_extract(year_of_release, "\\d{4}")
+
+# set year to all songs in the album
+current_table$Year_of_Release <- year
+
+# add album to the scorpions
+scorpions <- rbind(scorpions, current_table)
+
+unique(scorpions$Album_Name)
+
+
+
+# correcting year of release for some albums
+indexes_face_the_heat <- which(scorpions$Album_Name == "Face the Heat")
+scorpions[indexes_face_the_heat,]$Year_of_Release <- '1993'
+
+indexes_face_the_heat <- which(scorpions$Album_Name == "Pure Instinct")
+scorpions[indexes_face_the_heat,]$Year_of_Release <- '1996'
+
+# remove "" from Song_Title column
+scorpions$Song_Title <-  gsub("\"", "", scorpions$Song_Title)
+
+# cleaning Song_Title column
+scorpions$Song_Title <- gsub("\\(.*?\\)", "", scorpions$Song_Title)
+scorpions[c(62,183),] <- NA
+
+indexes_with_length <- grep("length", scorpions$Song_Title, ignore.case = TRUE, value = FALSE)
+scorpions[indexes_with_length,] <- NA
+
+scorpions <- scorpions[complete.cases(scorpions$Song_Title),]
+
