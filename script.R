@@ -3086,3 +3086,254 @@ song_data <- song_data[!duplicates, ]
 # add Genres, Styles, Moods and Themes to scorpions
 scorpions <- left_join(scorpions, song_data, by = "Song_Title")
 
+
+
+########################################################################################
+# Add data about UK Charts performance
+########################################################################################
+
+# define the URL of the page containing data about UK charts
+url <- "https://www.officialcharts.com/artist/17682/scorpions/"
+
+# read the HTML content of the webpage
+page <- read_html(url)
+
+# extract all 'div' elements with class "chart-content"
+page %>%
+  html_nodes("div.chart-content") %>%
+  head()
+
+# extract the first 'div' element with class "chart-content"
+first_chart_content <- page %>%
+  html_nodes("div.chart-content") %>%
+  head(1)
+
+# extract all 'div' elements with class "chart-items" from first_chart_content
+first_chart_items <- first_chart_content %>%
+  html_nodes("div.chart-items")
+
+# extract all 'div' elements with class "chart-item"
+first_chart_item <- first_chart_content %>%
+  html_nodes("div.chart-item")
+
+# extract all 'div' elements with class "chart-item-content"
+first_chart_item_content <- first_chart_content %>%
+  html_nodes("div.chart-item-content")
+
+# extract song position and number of weeks
+first_chart_item_content_desc <- first_chart_content %>%
+  html_nodes("div.description") %>%
+  html_text()
+
+first_chart_item_content_desc
+first_chart_item_content_desc <- gsub("SCORPIONS", ", ", first_chart_item_content_desc)
+
+# format first_chart_item_content_desc
+first_chart_item_content_desc <- gsub("Scorpions", ", ", first_chart_item_content_desc)
+
+# Extract debut dates on the UK Charts for each song
+first_chart_item_content_date <- first_chart_content %>%
+  html_nodes("time.date") %>%
+  html_text()
+
+# merge song positions, number of weeks and debut dates
+uk_charts_data <- paste(first_chart_item_content_desc, first_chart_item_content_date, sep = ", ")
+uk_charts_data
+uk_charts_data <- strsplit(uk_charts_data, ", ")
+uk_charts_data
+
+# convert uk_charts_data to data frame and format
+scorpions_british_charts <- data.frame(matrix(unlist(uk_charts_data), ncol = 4, byrow = TRUE))
+
+# set column names and format
+colnames(scorpions_british_charts) <- c("Song_Title", "Peak", "Weeks", "Date")
+scorpions_british_charts$Peak <- str_replace(scorpions_british_charts$Peak, "Peak: ", "")
+scorpions_british_charts$Weeks <- str_replace(scorpions_british_charts$Weeks, "Weeks: ", "")
+
+# ad uk charts data to scorpions ----------------
+
+# add columns British_Charts, UK_Debut_Date, UK_Peak_Pos and UK_Chart_Weeks
+scorpions$British_Charts <- 'No'
+scorpions$UK_Debut_Date <- NA
+scorpions$UK_Peak_Pos <- NA
+scorpions$UK_Chart_Weeks <- NA
+
+# extract song titles from the scorpions_british_charts
+songs <- scorpions_british_charts$Song_Title
+songs
+
+# loop through each song title and add uk charts data to scorpions
+for (i in 1:length(songs)) {
+  # find the index of the song title in the scorpions 
+  indeks <- which(str_to_upper((trimws(scorpions$Song_Title))) == songs[i])
+  
+  scorpions[indeks,]$British_Charts <- 'Yes'
+  scorpions[indeks,]$UK_Debut_Date <- scorpions_british_charts[i,]$Date
+  scorpions[indeks,]$UK_Peak_Pos <- scorpions_british_charts[i,]$Peak
+  scorpions[indeks,]$UK_Chart_Weeks <- scorpions_british_charts[i,]$Weeks
+}
+
+
+
+########################################################################################
+# Add data about US Charts performance
+########################################################################################
+
+# extract Billboard chart history for Iron Maiden from the given URL
+url <- "https://www.billboard.com/artist/scorpions/chart-history/hsi/"
+page <- read_html(url)
+
+# extract the table containing Billboard chart history items
+table <- page %>%
+  html_nodes("div.artist-chart-history-items") %>%
+  head(1)
+
+# extract song titles 
+titles <- table %>%
+  html_nodes("h3.artist-chart-row-title") %>%
+  html_text()
+
+# extract debut dates
+debut_dates <- table %>%
+  html_nodes("span.artist-chart-row-debut-date a") %>%
+  html_text()
+
+# extract peak positions
+peak_positions <- table %>%
+  html_nodes("span.artist-chart-row-peak-pos") %>%
+  html_text()
+
+# extract weeks on chart
+weeks_on_chart <- table %>%
+  html_nodes("span.artist-chart-row-week-on-chart") %>%
+  html_text()
+
+# create a dataframe to store us charts data
+scorpions_billboard <- data.frame(
+  Song_Title = titles,
+  US_Debut_Date = debut_dates,
+  US_Peak_Pos = peak_positions,
+  US_Chart_Weeks = weeks_on_chart
+)
+
+# format columns
+scorpions_billboard <- as.data.frame(apply(scorpions_billboard,2,function(x){gsub("\\s+", " ", x)}))
+scorpions_billboard <- as.data.frame(apply(scorpions_billboard,2,function(x){trimws(x)}))
+
+
+# add columns related to Billboard 200 information in scorpions
+scorpions$US_100 <- 'No'
+scorpions$US_Debut_Date <- NA
+scorpions$US_Peak_Pos <- NA
+scorpions$US_Chart_Weeks <- NA
+
+# extract song titles from the scorpions_billboard
+songs <- scorpions_billboard$Song_Title
+
+# loop through each song title and add data about US charts to scorpions
+for (i in 1:length(songs)) {
+  # find the index of the song title in the scorpions 
+  indeks <- which(toupper((trimws(scorpions$Song_Title))) == toupper(songs[i]))
+  
+  scorpions[indeks,]$US_100 <- 'Yes'
+  scorpions[indeks,]$US_Debut_Date <- scorpions_billboard[i,]$US_Debut_Date
+  scorpions[indeks,]$US_Peak_Pos <- scorpions_billboard[i,]$US_Peak_Pos
+  scorpions[indeks,]$US_Chart_Weeks <- scorpions_billboard[i,]$US_Chart_Weeks
+}
+
+
+
+########################################################################################
+# Add data about International charts performance
+########################################################################################
+
+
+# load the Wikipedia page containing Scorpions discography and read the HTML content
+url  <- "https://en.wikipedia.org/wiki/Scorpions_discography#Singles"
+page <- read_html(url)
+
+# extract table from the HTML page using an XPath expression
+table <- page %>% html_nodes(xpath = "/html/body/div[2]/div/div[3]/main/div[3]/div[3]/div[1]/table[8]/tbody") %>% html_table(fill = TRUE) %>% .[[1]]
+
+# remove unnecessary columns and rows
+table
+table[,c(5,7,11,12,13,14)] <- NULL
+table <- table[-1,]
+table <- table[-83,]
+
+# rename columns
+colnames(table) <- c("Song_Title","Year","GER","AUS","CAN","NLD","SWE","SWI")
+
+# add new columns to the scorpions
+scorpions$Year <- NA
+scorpions$AUS <- NA
+scorpions$CAN <- NA
+scorpions$GER <- NA
+scorpions$NLD <- NA
+scorpions$NZ <- NA
+scorpions$SWE <- NA
+scorpions$SWI <- NA
+scorpions$Certifications <- NA
+
+# extract song titles from the table
+songs <- table$Song_Title
+
+songs <- gsub("\"", "", songs)
+
+# loop through each song title and add data about International charts to scorpions
+for (i in 1:length(table$Song_Title)) {
+  # find the index of the song title in the scorpions 
+  indeks <- which((trimws(scorpions$Song_Title)) == songs[i])
+  
+  scorpions[indeks,]$Year <- table[i,]$Year
+  scorpions[indeks,]$AUS <- table[i,]$AUS
+  scorpions[indeks,]$CAN <- table[i,]$CAN
+  scorpions[indeks,]$GER <- table[i,]$GER
+  scorpions[indeks,]$NLD <- table[i,]$NLD
+  scorpions[indeks,]$SWE <- table[i,]$SWE
+  scorpions[indeks,]$SWI <- table[i,]$SWI
+}
+
+
+# adding RIAA Certifications for Wind of Change
+scorpions[scorpions$Song_Title == 'Wind of Change',]$Certifications <- 'RIAA: Gold'
+
+# BPI certification
+scorpions[scorpions$Song_Title == 'Rock You Like a Hurricane',]$Certifications <- 'BPI: Silver'
+scorpions[scorpions$Song_Title == 'Wind of Change',]$Certifications <- 
+  paste(scorpions[scorpions$Song_Title == 'Wind of Change',]$Certifications, 'BPI: Silver')
+
+
+
+# formating charts data
+scorpions[,26:28] <- data.frame(apply(scorpions[,26:28], 2,function(x) ifelse(is.na(x), "-", x)))
+scorpions[,30:41] <- data.frame(apply(scorpions[,30:41], 2,function(x) ifelse(is.na(x), "-", x)))
+scorpions[, 26:41] <- lapply(scorpions[, 26:41], function(x) gsub("—", "-", x))
+scorpions$Certifications[scorpions$Certifications == ""] <- '-'
+
+# function to check if any chart column has value
+has_all_dash <- function(row) {
+  all(row[c("AUS"," CAN", "GER", "NLD", "NZ", "SWE", "SWI")] == "-")
+}
+
+# delete year if there was no chart position
+scorpions$Year <- ifelse(apply(scorpions, 1, has_all_dash), "-", scorpions$Year)
+scorpions[is.na(scorpions$Year),]$Year <- "-"
+
+# sort songs by Song_Title
+scorpions <- arrange(scorpions, Song_Title)
+
+# remove duplicates 
+scorpions$Song_Title <- trimws(scorpions$Song_Title)
+duplicates <- duplicated(scorpions$Song_Title)
+sum(duplicates)
+scorpions[duplicates,] <- NA
+scorpions <- scorpions[complete.cases(scorpions$Song_Title),]
+
+names(scorpions)[names(scorpions) == "Year_of_Release"] <- "Year_of_First_Release"
+
+# add scorpions to the hard_rock data frame
+hard_rock <- rbind(hard_rock, scorpions)
+
+# save data frame df in .csv file
+write.csv(hard_rock, file = "hard_rock.csv", row.names = F)
