@@ -2338,22 +2338,6 @@ hard_rock <- rbind(hard_rock, metallica)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # libraries loading -----------------------------------------------------------
 
 # install.packages("rvest")
@@ -2771,4 +2755,70 @@ indexes_with_length <- grep("length", scorpions$Song_Title, ignore.case = TRUE, 
 scorpions[indexes_with_length,] <- NA
 
 scorpions <- scorpions[complete.cases(scorpions$Song_Title),]
+
+
+##########################################
+# Single column
+
+# define data url
+url  <- "https://en.wikipedia.org/wiki/Scorpions_discography#Singles"
+
+# read page from the url
+page <- read_html(url)
+
+# extract table from the HTML page using an XPath expression
+table <- page %>% html_nodes(xpath = "/html/body/div[2]/div/div[3]/main/div[3]/div[3]/div[1]/table[8]/tbody") %>% html_table(fill = TRUE) %>% .[[1]]
+table <- table[-c(1,84),]
+
+# clean column Title
+table$Title <-  gsub("\"", "", table$Title)
+table$Title <- gsub("\\(.*?\\)", "", table$Title)
+table <- table[-c(38,39),]
+
+# extract song titles
+songs <- table$Title
+
+# add new column Single to the scorpions and set value to 'No'
+scorpions$Single <- 'No'
+
+# loop through each song title and find singles
+for (i in 1:length(songs)) {
+  indeks <- which(tolower(gsub("\\s+", "", scorpions$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
+  scorpions[indeks,]$Single <- 'Yes'
+}
+
+# add column Band
+scorpions$Band <- 'Scorpions'
+
+# arrange columns order
+scorpions <- scorpions[,c(2,8,5,6,7,3,1,4)]
+
+# remove duplicates
+scorpions <- scorpions[!duplicated(scorpions$Song_Title), ]
+
+
+
+#########################################################################################
+# load data about record labels
+#########################################################################################
+
+# link to the record label data 
+url <- "https://www.allmusic.com/artist/scorpions-mn0000299471/discography"
+
+# load record label data and select valid columns
+page <- read_html(url)
+record_label <-  html_table(page, fill = TRUE)[[1]]
+record_label <- record_label[-c(1,2,6,7,8)]
+
+# add Record_Label column
+scorpions$Record_Label <- NA
+
+# change some album names so that names match
+record_label[22,]$Album <- 'Humanity:Hour I'
+
+# iterate through each album title and find Record Label
+for (i in 1:length(record_label$Album)) {
+  indeks <- which(tolower(gsub("\\s+", "", scorpions$Album_Name))== tolower(gsub("\\s+", "", record_label$Album[i])))
+  scorpions[indeks,]$Record_Label<- record_label[i,]$Label
+}
 
