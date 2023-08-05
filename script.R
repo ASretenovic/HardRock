@@ -2120,9 +2120,218 @@ df <- left_join(df, song_data, by = "Song_Title")
 
 
 
+########################################################################################
+# Add data about UK Charts performance
+########################################################################################
+
+# define the URL of the page containing data about UK charts
+url <- "https://www.officialcharts.com/artist/24423/metallica/"
+
+# read the HTML content of the webpage
+page <- read_html(url)
+
+# extract all 'div' elements with class "chart-content"
+page %>%
+  html_nodes("div.chart-content") %>%
+  head()
+
+# extract the first 'div' element with class "chart-content"
+first_chart_content <- page %>%
+  html_nodes("div.chart-content") %>%
+  head(1)
+
+# extract all 'div' elements with class "chart-items" from first_chart_content
+first_chart_items <- first_chart_content %>%
+  html_nodes("div.chart-items")
+
+# extract all 'div' elements with class "chart-item"
+first_chart_item <- first_chart_content %>%
+  html_nodes("div.chart-item")
+
+# extract all 'div' elements with class "chart-item-content"
+first_chart_item_content <- first_chart_content %>%
+  html_nodes("div.chart-item-content")
+
+# extract song position and number of weeks
+first_chart_item_content_desc <- first_chart_content %>%
+  html_nodes("div.description") %>%
+  html_text()
+
+
+# format first_chart_item_content_desc
+first_chart_item_content_desc <- gsub("METALLICA", ", ", first_chart_item_content_desc)
+
+# Extract debut dates on the UK Charts for each song
+first_chart_item_content_date <- first_chart_content %>%
+  html_nodes("time.date") %>%
+  html_text()
+
+# merge song positions, number of weeks and debut dates
+uk_charts_data <- paste(first_chart_item_content_desc, first_chart_item_content_date, sep = ", ")
+uk_charts_data <- strsplit(uk_charts_data, ", ")
+
+# convert uk_charts_data to data frame and format
+df_british_charts <- data.frame(matrix(unlist(uk_charts_data), ncol = 4, byrow = TRUE))
+
+# set column names and format
+colnames(df_british_charts) <- c("Song_Title", "Peak", "Weeks", "Date")
+df_british_charts$Peak <- str_replace(df_british_charts$Peak, "Peak: ", "")
+df_british_charts$Weeks <- str_replace(df_british_charts$Weeks, "Weeks: ", "")
+
+# ad uk charts data to df ----------------
+
+# add columns British_Charts, UK_Debut_Date, UK_Peak_Pos and UK_Chart_Weeks
+df$British_Charts <- 'No'
+df$UK_Debut_Date <- NA
+df$UK_Peak_Pos <- NA
+df$UK_Chart_Weeks <- NA
+
+# extract song titles from the df_british_charts
+songs <- df_british_charts$Song_Title
+
+# loop through each song title and add uk charts data to df
+for (i in 1:length(songs)) {
+  # find the index of the song title in the df 
+  indeks <- which(str_to_upper((trimws(df$Song_Title))) == songs[i])
+  
+  df[indeks,]$British_Charts <- 'Yes'
+  df[indeks,]$UK_Debut_Date <- df_british_charts[i,]$Date
+  df[indeks,]$UK_Peak_Pos <- df_british_charts[i,]$Peak
+  df[indeks,]$UK_Chart_Weeks <- df_british_charts[i,]$Weeks
+}
+
+
+########################################################################################
+# Add data about US Charts performance
+########################################################################################
+
+
+# extract Billboard chart history for AC/DC from the given URL
+url <- "https://www.billboard.com/artist/metallica/chart-history/hsi/"
+page <- read_html(url)
+
+# extract the table containing Billboard chart history items
+table <- page %>%
+  html_nodes("div.artist-chart-history-items") %>%
+  head(1)
+
+# extract song titles 
+titles <- table %>%
+  html_nodes("h3.artist-chart-row-title") %>%
+  html_text()
+
+# extract debut dates
+debut_dates <- table %>%
+  html_nodes("span.artist-chart-row-debut-date a") %>%
+  html_text()
+
+# extract peak positions
+peak_positions <- table %>%
+  html_nodes("span.artist-chart-row-peak-pos") %>%
+  html_text()
+
+# extract weeks on chart
+weeks_on_chart <- table %>%
+  html_nodes("span.artist-chart-row-week-on-chart") %>%
+  html_text()
+
+# create a dataframe to store us charts data
+df_billboard <- data.frame(
+  Song_Title = titles,
+  US_Debut_Date = debut_dates,
+  US_Peak_Pos = peak_positions,
+  US_Chart_Weeks = weeks_on_chart
+)
+
+# format columns
+df_billboard <- as.data.frame(apply(df_billboard,2,function(x){gsub("\\s+", " ", x)}))
+df_billboard <- as.data.frame(apply(df_billboard,2,function(x){trimws(x)}))
+
+
+# add columns related to Billboard 200 information in df
+df$US_100 <- 'No'
+df$US_Debut_Date <- NA
+df$US_Peak_Pos <- NA
+df$US_Chart_Weeks <- NA
+
+# extract song titles from the df_billboard
+songs <- df_billboard$Song_Title
+songs
+
+# loop through each song title and add data about US charts to df
+for (i in 1:length(songs)) {
+  # find the index of the song title in the df 
+  indeks <- which(str_to_upper((trimws(df$Song_Title))) == str_to_upper(songs[i]))
+  
+  df[indeks,]$US_100 <- 'Yes'
+  df[indeks,]$US_Debut_Date <- df_billboard[i,]$US_Debut_Date
+  df[indeks,]$US_Peak_Pos <- df_billboard[i,]$US_Peak_Pos
+  df[indeks,]$US_Chart_Weeks <- df_billboard[i,]$US_Chart_Weeks
+}
 
 
 
+########################################################################################
+# Add data about International charts performance
+########################################################################################
+
+# load the Wikipedia page containing AC/DC discography and read the HTML content
+url  <- "https://en.wikipedia.org/wiki/Metallica_discography#Singles"
+page <- read_html(url)
+
+# extract table from the HTML page using an XPath expression
+table <- page %>% html_nodes(xpath = "/html/body/div[2]/div/div[3]/main/div[3]/div[3]/div[1]/table[10]/tbody") %>% html_table(fill = TRUE) %>% .[[1]]
+
+# remove unnecessary columns and rows
+table
+table[,c(3,4,8,12,14,15)] <- NULL
+table <- table[-1,]
+
+# rename columns
+colnames(table) <- c("Song_Title","Year","AUS","GER","NLD","NZ","SWE","SWI", "Certifications")
+table$Song_Title <-  gsub("\"", "", table$Song_Title)
+
+# add new columns to the df
+df$Year <- NA
+df$AUS <- NA
+df$CAN <- NA
+df$GER <- NA
+df$NLD <- NA
+df$NZ <- NA
+df$SWE <- NA
+df$SWI <- NA
+df$Certifications <- NA
+
+# extract song titles from the table
+songs <- table$Song_Title
+
+# loop through each song title and add data about International charts to df
+for (i in 1:length(table$Song_Title)) {
+  # find the index of the song title in the df 
+  indeks <- which((trimws(df$Song_Title)) == songs[i])
+  
+  df[indeks,]$Year <- table[i,]$Year
+  df[indeks,]$AUS <- table[i,]$AUS
+  df[indeks,]$GER <- table[i,]$GER
+  df[indeks,]$NLD <- table[i,]$NLD
+  df[indeks,]$NZ <- table[i,]$NZ
+  df[indeks,]$SWE <- table[i,]$SWE
+  df[indeks,]$SWI <- table[i,]$SWI
+  df[indeks,]$Certifications <- table[i,]$Certifications
+}
+
+
+# formating charts data
+df[,26:28] <- data.frame(apply(df[,26:28], 2,function(x) ifelse(is.na(x), "-", x)))
+df[,30:41] <- data.frame(apply(df[,30:41], 2,function(x) ifelse(is.na(x), "-", x)))
+df[, 26:41] <- lapply(df[, 26:41], function(x) gsub("—", "-", x))
+df$Certifications[df$Certifications == ""] <- '-'
+
+metallica <- df
+
+
+
+hard_rock <- rbind(hard_rock, metallica)
 
 
 
