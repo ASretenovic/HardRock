@@ -3870,7 +3870,24 @@ names(scorpions)[names(scorpions) == "Year_of_Release"] <- "Year_of_First_Releas
 # add scorpions to the hard_rock data frame
 hard_rock <- rbind(hard_rock, scorpions)
 
+
+
+# delete value from Year if there aro no values in GER, AUS, CAN, SWE, SWI, NLD, NZ
+sum(hard_rock$Year != '-' & hard_rock$GER == '-' & hard_rock$AUS == '-'
+    & hard_rock$CAN == '-' & hard_rock$SWE == '-' & hard_rock$SWI == '-'
+    & hard_rock$NLD == '-' & hard_rock$NZ == '-')
+# 12 values to delete
+
+
+hard_rock$Year[hard_rock$Year != '-' & 
+                 hard_rock$GER == '-' & 
+                 hard_rock$AUS == '-' & 
+                 hard_rock$CAN == '-' & 
+                 hard_rock$SWE == '-' & 
+                 hard_rock$SWI == '-' & 
+                 hard_rock$NLD == '-' & 
+                 hard_rock$NZ == '-'] <- '-'
+
+
 # save data frame df in .csv file
 write.csv(hard_rock, file = "hard_rock.csv", row.names = F)
-
-
