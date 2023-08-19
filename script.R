@@ -196,7 +196,16 @@ albums_links <- c("https://www.allmusic.com/album/high-voltage-mw0000188976",
 
 # processing data related to albums 
 for (i in 1:length(albums_links)) {
+  
   page <- read_html(albums_links[i])
+  
+  # load album name
+  album_name <- page %>%
+    html_nodes("h1.album-title") %>% html_text()
+  
+  album_name <- trimws(gsub("\n", "", album_name))
+  
+  # load album
   album <-  html_table(page, fill = TRUE)[[1]]
   
   # select valid columns and rename them
@@ -221,13 +230,24 @@ for (i in 1:length(albums_links)) {
   # iterate through each song title from the album and find Track Number i Song Duration data
   for (i in 1:length(songs)) {
     indeks <- which(tolower(gsub("\\s+", "", df$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
-    df[indeks,]$Track_Number <- album[i,]$`Track Number`
-    df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+    
+    
+    if(length(indeks) > 0 && is.na(df[indeks,]$Track_Number) == T && is.na(df[indeks,]$Song_Duration) == T){
+      
+      if(length(indeks) > 0 && album_name != df[indeks,]$Album_Name){
+        df[indeks,]$Album_Name <- album_name
+      }
+      
+      df[indeks,]$Track_Number <- album[i,]$`Track Number`
+      df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+    }
+    
   }
   
 }
 
-# imam 14 pesama za koje mi fali Song_Duration i Track_Number
+
+# za 14 pesama fali Song_Duration i Track_Number
 sum(is.na(df$Track_Number))
 
 
@@ -245,7 +265,6 @@ record_label <-  html_table(page, fill = TRUE)[[1]]
 record_label <- record_label[-c(1,2,6,7,8)]
 
 # rename some albums so that names match with df$Album_Name
-record_label$Album <-  gsub("The Razor's Edge", "The Razors Edge", record_label$Album)
 record_label$Album <-  gsub("Live", "AC/DC Live", record_label$Album)
 
 # add Record_Label column
@@ -263,6 +282,10 @@ for (i in 1:length(record_label$Album)) {
 # Add audio features from Spotify playlist
 ########################################################################################
 
+###############################################################################
+# playlist All songs ACDC
+
+
 #install.packages("spotifyr")
 library(spotifyr)
 
@@ -273,7 +296,132 @@ Sys.setenv(SPOTIFY_CLIENT_SECRET = "058710aee06347fea415a46f5f2bc883")
 # generate access token
 access_token <- get_spotify_access_token()
 
-# playlist url
+###############################################################################
+# playlist All songs ACDC
+
+
+# playlist url for albums High Voltage and Backtracks
+album_links <- c("https://open.spotify.com/album/0I7FkYrckzJtK1ND8vzqoO",
+                 "https://open.spotify.com/album/19AUoKWRAaQYrggVvdQnqq")
+
+
+
+# creating new columns with NA values in df
+df$Key <- NA
+df$Mode <- NA
+df$Loudness <- NA
+df$Tempo <- NA
+
+df$Acousticness <- NA
+df$Danceability <- NA
+df$Energy <- NA
+df$Instrumentalness <- NA
+df$Liveness <- NA
+df$Speechiness <- NA
+df$Valence <- NA
+
+for(i in 1:length(album_links)){
+  playlist_url <- album_links[i]
+  
+  # extract playlist ID from playlist url
+  playlist_id <- sub("^.+/([[:alnum:]]+)$", "\\1", playlist_url)
+  
+  # initialize an empty data frame to store all tracks from the playlist
+  all_tracks <- NULL
+  
+  # set the starting offset
+  offset <- 0
+  # set the number of tracks to be fetched in a single API call
+  limit <- 50
+  
+  # a repeat loop to fetch tracks page by page 
+  
+  all_tracks <- NULL
+  
+  # set the starting offset
+  offset <- 0
+  # set the number of tracks to be fetched in a single API call
+  limit <- 50
+  
+  # a repeat loop to fetch tracks page by page 
+  repeat {
+    tracks <- get_album_tracks(playlist_id, limit = limit, offset = offset)
+    
+    # loop exit condition
+    if (length(tracks) == 0) {
+      break
+    }
+    
+    tracks_df <- as.data.frame(tracks)
+    all_tracks <- bind_rows(all_tracks, tracks_df)
+    
+    # update the offset to fetch the next page
+    offset <- offset + limit
+  }
+  
+  
+  
+  # extracting track IDs and track names from the 'all_tracks'
+  track_ids <- all_tracks$id
+  track_name <- all_tracks$name
+  
+  
+  # create an empty list to store audio features for all tracks
+  all_audio_features <- list()
+  
+  # iterating through each track ID to fetch audio features
+  for (track_id in track_ids) {
+    
+    audio_feature <- get_track_audio_features(track_id)
+    
+    track <- get_track(track_id)
+    track_name <- track$name
+    
+    audio_feature$Track_ID <- track_id
+    audio_feature$Track <- track_name
+    all_audio_features[[track_id]] <- audio_feature
+  }
+  
+  
+  all_audio_features_df <- do.call(rbind, all_audio_features)
+  
+  # adding a new column Row to the all_audio_features_df
+  all_audio_features_df$Row <- seq_len(nrow(all_audio_features_df))
+  
+  # cleaning Track column
+  all_audio_features_df$Track <- str_to_upper(all_audio_features_df$Track)
+  all_audio_features_df$Track <- sub(" -.*", "", all_audio_features_df$Track)
+  all_audio_features_df$Track <- trimws(all_audio_features_df$Track)
+  
+  
+  songs <- all_audio_features_df$Track
+  
+  # ooping through each song and adding attributes to that song in df
+  for (i in 1:length(all_audio_features_df$id)) {
+    
+    #f inding the row index in the main data frame df based on song title
+    indeks <- which(str_to_upper(trimws(df$Song_Title)) == songs[i])
+    
+    df[indeks,]$Key <- all_audio_features_df[i,]$key
+    df[indeks,]$Mode <- all_audio_features_df[i,]$mode
+    df[indeks,]$Loudness <- all_audio_features_df[i,]$loudness
+    df[indeks,]$Tempo <- all_audio_features_df[i,]$tempo
+    
+    df[indeks,]$Acousticness <- all_audio_features_df[i,]$acousticness
+    df[indeks,]$Danceability <- all_audio_features_df[i,]$danceability
+    df[indeks,]$Energy <- all_audio_features_df[i,]$energy
+    df[indeks,]$Instrumentalness <- all_audio_features_df[i,]$instrumentalness
+    df[indeks,]$Liveness <- all_audio_features_df[i,]$liveness
+    df[indeks,]$Speechiness <- all_audio_features_df[i,]$speechiness
+    df[indeks,]$Valence <- all_audio_features_df[i,]$valence
+    
+  }
+  
+  
+}
+
+
+# playlist url for All songs - AC/DC
 playlist_url <- "https://open.spotify.com/playlist/4cL9rp2NoV2lcIbiAe3t58"
 
 # extract playlist ID from playlist url
@@ -334,20 +482,6 @@ all_audio_features_df$Track <- str_to_upper(all_audio_features_df$Track)
 all_audio_features_df$Track <- sub(" -.*", "", all_audio_features_df$Track)
 all_audio_features_df$Track <- trimws(all_audio_features_df$Track)
 
-# creating new columns with NA values in df
-df$Key <- NA
-df$Mode <- NA
-df$Loudness <- NA
-df$Tempo <- NA
-
-df$Acousticness <- NA
-df$Danceability <- NA
-df$Energy <- NA
-df$Instrumentalness <- NA
-df$Liveness <- NA
-df$Speechiness <- NA
-df$Valence <- NA
-
 songs <- all_audio_features_df$Track
 
 # ooping through each song and adding attributes to that song in df
@@ -370,6 +504,8 @@ for (i in 1:length(all_audio_features_df$id)) {
   df[indeks,]$Valence <- all_audio_features_df[i,]$valence
   
 }
+
+
 
 
 ########################################################################################
@@ -418,9 +554,6 @@ all_songs_links[grepl("^/song/", all_songs_links)] <- NA
 all_songs_links[grepl("/artist/", all_songs_links)] <- NA
 all_songs_links <- all_songs_links[complete.cases(all_songs_links)]
 
-# remove duplicate songs
-all_songs_links <- all_songs_links[seq(2, length(all_songs_links), by = 2)]
-all_songs_links
 
 # create data frame to store attributes
 song_data <- data.frame(
@@ -435,8 +568,8 @@ song_data <- data.frame(
 
 # extract attributes for every song
 for(i in 1:length(all_songs_links)){
-  # loading content page
-  song_page_html <- read_html(all_songs_links[i])
+  
+  song_page_html <- read_html(paste(all_songs_links[i], "/attributes", sep = ""))
   
   # retrieving song title
   song_title <- ""
@@ -452,7 +585,7 @@ for(i in 1:length(all_songs_links)){
   
   # adding Genres -------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_genres div.middle") %>%
+    html_nodes("div.attribute-tab-genres div.middle") %>%
     head(1)
   
   attribute <- tab %>%
@@ -464,9 +597,10 @@ for(i in 1:length(all_songs_links)){
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Genres <- cleaned_string
   
+  
   # adding Styles --------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_styles div.middle") %>%
+    html_nodes("div.attribute-tab-styles div.middle") %>%
     head(1)
   
   attribute <- tab %>%
@@ -478,30 +612,35 @@ for(i in 1:length(all_songs_links)){
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Styles <- cleaned_string
   
+  
   # adding Moods ---------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_moods div.middle") %>%
+    html_nodes("div.attribute-tab-moods div.middle") %>%
     head(1)
   
   attribute <- tab %>%
     html_nodes("a") %>% html_text()
+  attribute
   
   # clean the string attribute containing moods
   cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Moods <- cleaned_string
   
+  
   # adding Themes -------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_themes div.middle") %>%
+    html_nodes("div.attribute-tab-themes div.middle") %>%
     head(1)
   
   attribute <- tab %>%
     html_nodes("a") %>% html_text()
+  attribute
   
   # clean the string attribute containing themes
   cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
   cleaned_string <- paste(cleaned_string, collapse = ", ")
+  cleaned_string
   song_data[i,]$Themes <- cleaned_string
   
 }
@@ -512,15 +651,36 @@ song_data$Genres[song_data$Genres == ""] <- NA
 song_data$Moods[song_data$Moods == ""] <- NA
 song_data$Themes[song_data$Themes == ""] <- NA
 
-# extract the rows with values in Styles, Genres, Themes or Moods
+# extract rows with values in Styles, Genres, Themes, Moods
 song_data <- song_data[apply(song_data[, c("Styles", "Genres", "Themes", "Moods")], 1, function(x) any(!is.na(x))), ]
 
-# remove duplicates
+# remove white space
+song_data$Song_Title <- trimws(song_data$Song_Title)
+
+# correct some song titles
+song_data[song_data$Song_Title == 'Givin the Dog a Bone',]$Song_Title <- 'Given The Dog A Bone'
+song_data[song_data$Song_Title == 'Meanstreak',]$Song_Title <- 'Mean Streak'
+song_data[song_data$Song_Title == 'Rock N Roll Dream',]$Song_Title <- "Rock 'N' Roll Dream"
+song_data[song_data$Song_Title == 'Rock N Roll Train',]$Song_Title <- "Rock 'N Roll Train"
+song_data[song_data$Song_Title == "She Likes Rock N' Roll",]$Song_Title <- "She Likes Rock N Roll"
+song_data[song_data$Song_Title == "Smash N Grab",]$Song_Title <- "Smash 'N' Grab"
+
+
+# remove duplicates from the song_data
 duplicates <- duplicated(song_data$Song_Title)
 song_data <- song_data[!duplicates, ]
 
+# format Song_Title column so that titles match
+df$Song_Title <- str_to_title(df$Song_Title)
+song_data$Song_Title <- str_to_title(song_data$Song_Title)
+df$Song_Title <- trimws(df$Song_Title)
+
 # add Genres, Styles, Moods and Themes to df
 df <- left_join(df, song_data, by = "Song_Title")
+
+# remove duplicates from the df
+duplicates <- duplicated(df$Song_Title)
+df <- df[!duplicates, ]
 
 
 
@@ -602,7 +762,6 @@ for (i in 1:length(songs)) {
   df[indeks,]$UK_Peak_Pos <- df_british_charts[i,]$Peak
   df[indeks,]$UK_Chart_Weeks <- df_british_charts[i,]$Weeks
 }
-
 
 
 
@@ -738,6 +897,7 @@ acdc <- df
 
 
 
+
 ###################################################################################################################
 ###################################################################################################################
 ##                                          Iron Maiden
@@ -787,6 +947,8 @@ rows_with_plus <- grep("†", df$Song_Title)
 df$Single[rows_with_plus] <- "Yes"
 df$Single <- as.factor(df$Single)
 
+df[df$Song_Title == 'Montségur',]$Song_Title <- 'Montsegur'
+
 # remove † value from the Song_Title column
 df$Song_Title <-  gsub("†", "", df$Song_Title)
 
@@ -805,8 +967,12 @@ str(df)
 df$Writers <- sapply(df$Writers, function(x){gsub("(?<=[a-z])(?=[A-Z])", ", ", x, perl = TRUE)})
 
 
-# Cleaning and standardizing the album names --------------------
+df[df$Album_Name == 'Wasted Years',]$Album_Name <- 'Somewhere in Time'
 
+
+# Cleaning and standardizing the album names --------------------
+df[df$Album_Name == 'Wasted Years',]$Album_Name <- 'Somewhere in Time'
+df[df$Album_Name == 'Somewhere In Time (unreleased single)',]$Album_Name <- 'Somewhere in Time'
 length(unique(df$Album_Name))
 unique(df$Album_Name)
 
@@ -868,7 +1034,6 @@ albums_links <- c("https://www.allmusic.com/album/iron-maiden-mw0000198284",
                   "https://www.allmusic.com/album/aces-high-mw0000857941",
                   "https://www.allmusic.com/album/rainmaker-mw0000464168",
                   "https://www.allmusic.com/album/2-minutes-to-midnight-mw0000973210",
-                  "https://www.allmusic.com/album/wasted-years-mw0002747177",
                   "https://www.allmusic.com/album/re-machined-a-tribute-to-deep-purples-machine-head-mw0002410805",
                   "https://www.allmusic.com/album/run-to-the-hills-mw0000532086",
                   "https://www.allmusic.com/album/the-best-of-the-beast-mw0000082114"
@@ -885,6 +1050,14 @@ df[9,]$Song_Title <- "Alexander the Great (356-323 B.C.)"
 # processing data related to albums 
 for (i in 1:length(albums_links)) {
   page <- read_html(albums_links[i])
+  
+  # load album name
+  album_name <- page %>%
+    html_nodes("h1.album-title") %>% html_text()
+  
+  album_name <- trimws(gsub("\n", "", album_name))
+  
+  # load album
   album <-  html_table(page, fill = TRUE)[[1]]
   
   # select valid columns and rename them
@@ -916,11 +1089,22 @@ for (i in 1:length(albums_links)) {
   # iterate through each song title from the album and find Track Number i Song Duration data
   for (i in 1:length(songs)) {
     indeks <- which(tolower(gsub("\\s+", "", df$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
-    df[indeks,]$Track_Number <- album[i,]$`Track Number`
-    df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+    
+    if(length(indeks) > 0 && is.na(df[indeks,]$Track_Number) == T && is.na(df[indeks,]$Song_Duration) == T){
+      
+      if(length(indeks) > 0 && album_name != df[indeks,]$Album_Name){
+        df[indeks,]$Album_Name <- album_name
+      }
+      
+      df[indeks,]$Track_Number <- album[i,]$`Track Number`
+      df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+    }
   }
   
 }
+
+
+sum(is.na(df$Track_Number))
 
 # getting song duration and track number data for some songs from Wikipedia
 albums_links <- c(
@@ -1100,7 +1284,6 @@ for (i in 1:length(all_audio_features_df$id)) {
 }
 
 
-
 ########################################################################################
 # Add data about genres, styles, moods and themes
 ########################################################################################
@@ -1163,8 +1346,9 @@ song_data <- data.frame(
 
 # extract attributes for every song
 for(i in 1:length(all_songs_links)){
-  # loading content page
-  song_page_html <- read_html(all_songs_links[i])
+  
+  
+  song_page_html <- read_html(paste(all_songs_links[i], "/attributes", sep = ""))
   
   # retrieving song title
   song_title <- ""
@@ -1180,7 +1364,7 @@ for(i in 1:length(all_songs_links)){
   
   # adding Genres -------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_genres div.middle") %>%
+    html_nodes("div.attribute-tab-genres div.middle") %>%
     head(1)
   
   attribute <- tab %>%
@@ -1192,9 +1376,10 @@ for(i in 1:length(all_songs_links)){
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Genres <- cleaned_string
   
+  
   # adding Styles --------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_styles div.middle") %>%
+    html_nodes("div.attribute-tab-styles div.middle") %>%
     head(1)
   
   attribute <- tab %>%
@@ -1206,30 +1391,35 @@ for(i in 1:length(all_songs_links)){
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Styles <- cleaned_string
   
+  
   # adding Moods ---------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_moods div.middle") %>%
+    html_nodes("div.attribute-tab-moods div.middle") %>%
     head(1)
   
   attribute <- tab %>%
     html_nodes("a") %>% html_text()
+  attribute
   
   # clean the string attribute containing moods
   cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Moods <- cleaned_string
   
+  
   # adding Themes -------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_themes div.middle") %>%
+    html_nodes("div.attribute-tab-themes div.middle") %>%
     head(1)
   
   attribute <- tab %>%
     html_nodes("a") %>% html_text()
+  attribute
   
   # clean the string attribute containing themes
   cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
   cleaned_string <- paste(cleaned_string, collapse = ", ")
+  cleaned_string
   song_data[i,]$Themes <- cleaned_string
   
 }
@@ -1240,17 +1430,34 @@ song_data$Genres[song_data$Genres == ""] <- NA
 song_data$Moods[song_data$Moods == ""] <- NA
 song_data$Themes[song_data$Themes == ""] <- NA
 
-song_data <- song_data[complete.cases(song_data$Genres),]
+# extract rows with values in Styles, Genres, Themes, Moods
+song_data <- song_data[apply(song_data[, c("Styles", "Genres", "Themes", "Moods")], 1, function(x) any(!is.na(x))), ]
 
 # extract the rows with values in Styles, Genres, Themes or Moods
 song_data <- song_data[apply(song_data[, c("Styles", "Genres", "Themes", "Moods")], 1, function(x) any(!is.na(x))), ]
 
-# remove duplicates
+# format Song_Title column so that names match
+song_data$Song_Title <- trimws(song_data$Song_Title)
+song_data$Song_Title <- str_to_title(song_data$Song_Title)
+df$Song_Title <- str_to_title(df$Song_Title)
+df$Song_Title <- trimws(df$Song_Title)
+
+song_data[song_data$Song_Title == 'Bring Your Daughter...To The Slaughter',]$Song_Title <- 'Bring Your Daughter... To The Slaughter'
+song_data[song_data$Song_Title == 'Deja Vu',]$Song_Title <- 'Deja-Vu'
+df[9,]$Song_Title <- "Alexander The Great"
+
+# remove duplicates from song_data
 duplicates <- duplicated(song_data$Song_Title)
 song_data <- song_data[!duplicates, ]
 
 # add Genres, Styles, Moods and Themes to df
 df <- left_join(df, song_data, by = "Song_Title")
+
+# remove duplicates df
+duplicates <- duplicated(df$Song_Title)
+df <- df[!duplicates, ]
+
+
 
 
 ########################################################################################
@@ -1486,10 +1693,6 @@ hard_rock <- rbind(acdc, iron_maiden)
 
 
 
-
-
-
-
 # install.packages("rvest")
 library(rvest)
 
@@ -1560,6 +1763,9 @@ df$Album_Name <-  gsub("\"", "", df$Album_Name)
 # add column Band
 df$Band <- "Metallica"
 
+# trim extra space
+df$Song_Title <- trimws(df$Song_Title)
+
 # switch positions of the columns Band and Writers
 df <- df[,c(1,6,3,4,5,2)]
 
@@ -1591,15 +1797,23 @@ albums_links <- c("https://www.allmusic.com/album/kill-em-all-mw0000651567",
                   "https://www.allmusic.com/album/hardwiredto-self-destruct-mw0002977037",
                   "https://www.allmusic.com/album/creeping-death-mw0001031638",
                   "https://www.allmusic.com/album/beyond-magnetic-mw0002289327",
-                  "https://www.allmusic.com/album/garage-inc-mw0000051667",
-                  "https://www.allmusic.com/album/hero-of-the-day-mw0000988428"
+                  "https://www.allmusic.com/album/garage-inc-mw0000051667"
 )
 
 unique(df$Writers)
 
 # processing data related to albums 
 for (i in 1:length(albums_links)) {
+  
   page <- read_html(albums_links[i])
+  
+  # load album name
+  album_name <- page %>%
+    html_nodes("h1.album-title") %>% html_text()
+  
+  album_name <- trimws(gsub("\n", "", album_name))
+  
+  # load album
   album <-  html_table(page, fill = TRUE)[[1]]
   
   # select valid columns and rename them
@@ -1627,7 +1841,8 @@ for (i in 1:length(albums_links)) {
                  "Tony Iommi","Ozzy Osbourne","Geezer Butler","Bill Ward",
                  "Nick Kulmer","Chris Exall", "Clive Blake","Bob Seger",
                  "Jaz Coleman","Geordie Walker","Martin Glover","Paul Ferguson",
-                 "Kasseem Dean","Jeffrey Atkins","Traditional","Metallica"
+                 "Kasseem Dean","Jeffrey Atkins","Traditional","Metallica",
+                 'Kelvin "Cal" Morris', 'Tony "Bones" Roberts', 'Roy "Rainy" Wainwright'
   )
   for (composer in composers) {
     album$Title <- gsub(composer, "", album$Title)
@@ -1635,15 +1850,29 @@ for (i in 1:length(albums_links)) {
   
   # select all song titles from the album
   songs <- album$Title
+  songs <- trimws(songs)
   
   # iterate through each song title from the album and find Track Number i Song Duration data
   for (i in 1:length(songs)) {
     indeks <- which(tolower(gsub("\\s+", "", df$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
-    df[indeks,]$Track_Number <- album[i,]$`Track Number`
-    df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+    
+    if(length(indeks) > 0 && is.na(df[indeks,]$Track_Number) == T && is.na(df[indeks,]$Song_Duration) == T){
+      
+      if(length(indeks) > 0 && album_name != df[indeks,]$Album_Name){
+        df[indeks,]$Album_Name <- album_name
+      }
+      
+      df[indeks,]$Track_Number <- album[i,]$`Track Number`
+      df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+    }
   }
   
 }
+
+
+# adding data for (Anesthesia)-Pulling Teeth
+df[8,]$Track_Number <- 5
+df[8,]$Song_Duration <- "04:14"
 
 # Some albums have disc 2
 albums_links <- c("https://www.allmusic.com/album/st-anger-mw0000022895",
@@ -1656,6 +1885,14 @@ albums_links <- c("https://www.allmusic.com/album/st-anger-mw0000022895",
 
 for (i in 1:length(albums_links)) {
   page <- read_html(albums_links[i])
+  
+  # load album name
+  album_name <- page %>%
+    html_nodes("h1.album-title") %>% html_text()
+  
+  album_name <- trimws(gsub("\n", "", album_name))
+  
+  # load album
   album <-  html_table(page, fill = TRUE)[[2]]
   
   # select valid columns and rename them
@@ -1683,25 +1920,38 @@ for (i in 1:length(albums_links)) {
                  "Tony Iommi","Ozzy Osbourne","Geezer Butler","Bill Ward",
                  "Nick Kulmer","Chris Exall", "Clive Blake","Bob Seger",
                  "Jaz Coleman","Geordie Walker","Martin Glover","Paul Ferguson",
-                 "Kasseem Dean","Jeffrey Atkins","Traditional","Metallica"
+                 "Kasseem Dean","Jeffrey Atkins","Traditional","Metallica",
+                 "Sweet Savage",'"Fast" Eddie Clarke', "Lemmy", 'Phil "Philthy Animal" Taylor'
   )
+  
   for (composer in composers) {
     album$Title <- gsub(composer, "", album$Title)
   }
   
+  album$Title <- gsub("Fast", "", album$Title)
+  album$Title <- gsub('""', '', album$Title)
+  
   # select all song titles from the album
   songs <- album$Title
+  songs <- trimws(songs)
   
   # iterate through each song title from the album and find Track Number i Song Duration data
   for (i in 1:length(songs)) {
     indeks <- which(tolower(gsub("\\s+", "", df$Song_Title))== tolower(gsub("\\s+", "", songs[i])))
-    df[indeks,]$Track_Number <- album[i,]$`Track Number`
-    df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+    
+    if(length(indeks) > 0 && is.na(df[indeks,]$Track_Number) == T && is.na(df[indeks,]$Song_Duration) == T){
+      
+      if(length(indeks) > 0 && album_name != df[indeks,]$Album_Name){
+        df[indeks,]$Album_Name <- album_name
+      }
+      
+      df[indeks,]$Track_Number <- album[i,]$`Track Number`
+      df[indeks,]$Song_Duration <- album[i, ]$`Song Duration`
+    }
   }
-  
 }
 
-
+sum(is.na(df$Track_Number))
 
 # Albums (from Wikipedia): The $5.98 E.P. – Garage Days Re-Revisited,
 # Until it Sleeps, The Unforgiven
@@ -1734,6 +1984,7 @@ album$"Title" <- gsub("/.*", "", album$"Title")
 
 album$`Track Number` <- gsub("\\.", "", album$`Track Number`)
 album$`Track Number` <- as.numeric(album$`Track Number`)
+album[5,]$Title <- "Last Caress/Green Hell"
 
 # select all song titles from the album
 songs <- album$Title
@@ -1780,9 +2031,6 @@ for(i in 2:3){
   }
   
 }
-
-# imam 14 pesama za koje mi fali Track_Number, 26 za koje fali Song_Duration
-sum(is.na(df$Song_Duration))
 
 
 #########################################################################################
@@ -1861,7 +2109,124 @@ Sys.setenv(SPOTIFY_CLIENT_SECRET = "058710aee06347fea415a46f5f2bc883")
 # generate access token
 access_token <- get_spotify_access_token()
 
-# playlist url
+
+# creating new columns with NA values in df
+df$Key <- NA
+df$Mode <- NA
+df$Loudness <- NA
+df$Tempo <- NA
+
+df$Acousticness <- NA
+df$Danceability <- NA
+df$Energy <- NA
+df$Instrumentalness <- NA
+df$Liveness <- NA
+df$Speechiness <- NA
+df$Valence <- NA
+
+
+# playlist for album Lulu
+playlist_url <- "https://open.spotify.com/album/3a1SJd8obHju43McHQew7J"
+
+# extract playlist ID from playlist url
+playlist_id <- sub("^.+/([[:alnum:]]+)$", "\\1", playlist_url)
+
+# initialize an empty data frame to store all tracks from the playlist
+all_tracks <- NULL
+
+# set the starting offset
+offset <- 0
+# set the number of tracks to be fetched in a single API call
+limit <- 50
+
+# a repeat loop to fetch tracks page by page 
+
+all_tracks <- NULL
+
+# set the starting offset
+offset <- 0
+# set the number of tracks to be fetched in a single API call
+limit <- 50
+
+# a repeat loop to fetch tracks page by page 
+repeat {
+  tracks <- get_album_tracks(playlist_id, limit = limit, offset = offset)
+  
+  # loop exit condition
+  if (length(tracks) == 0) {
+    break
+  }
+  
+  tracks_df <- as.data.frame(tracks)
+  all_tracks <- bind_rows(all_tracks, tracks_df)
+  
+  # update the offset to fetch the next page
+  offset <- offset + limit
+}
+
+
+
+# extracting track IDs and track names from the 'all_tracks'
+track_ids <- all_tracks$id
+track_name <- all_tracks$name
+
+
+# create an empty list to store audio features for all tracks
+all_audio_features <- list()
+
+# iterating through each track ID to fetch audio features
+for (track_id in track_ids) {
+  
+  audio_feature <- get_track_audio_features(track_id)
+  
+  track <- get_track(track_id)
+  track_name <- track$name
+  
+  audio_feature$Track_ID <- track_id
+  audio_feature$Track <- track_name
+  all_audio_features[[track_id]] <- audio_feature
+}
+
+
+all_audio_features_df <- do.call(rbind, all_audio_features)
+
+# adding a new column Row to the all_audio_features_df
+all_audio_features_df$Row <- seq_len(nrow(all_audio_features_df))
+
+# cleaning Track column
+all_audio_features_df$Track <- str_to_upper(all_audio_features_df$Track)
+all_audio_features_df$Track <- sub(" -.*", "", all_audio_features_df$Track)
+all_audio_features_df$Track <- trimws(all_audio_features_df$Track)
+
+
+songs <- all_audio_features_df$Track
+
+# ooping through each song and adding attributes to that song in df
+for (i in 1:length(all_audio_features_df$id)) {
+  
+  #f inding the row index in the main data frame df based on song title
+  indeks <- which(str_to_upper(trimws(df$Song_Title)) == songs[i])
+  
+  df[indeks,]$Key <- all_audio_features_df[i,]$key
+  df[indeks,]$Mode <- all_audio_features_df[i,]$mode
+  df[indeks,]$Loudness <- all_audio_features_df[i,]$loudness
+  df[indeks,]$Tempo <- all_audio_features_df[i,]$tempo
+  
+  df[indeks,]$Acousticness <- all_audio_features_df[i,]$acousticness
+  df[indeks,]$Danceability <- all_audio_features_df[i,]$danceability
+  df[indeks,]$Energy <- all_audio_features_df[i,]$energy
+  df[indeks,]$Instrumentalness <- all_audio_features_df[i,]$instrumentalness
+  df[indeks,]$Liveness <- all_audio_features_df[i,]$liveness
+  df[indeks,]$Speechiness <- all_audio_features_df[i,]$speechiness
+  df[indeks,]$Valence <- all_audio_features_df[i,]$valence
+  
+}
+
+
+
+
+
+# playlist url for All songs - Metallica
 playlist_url <- "https://open.spotify.com/playlist/5nT4NuUjJicsQEpNLQWQhK"
 
 # extract playlist ID from playlist url
@@ -1924,20 +2289,6 @@ all_audio_features_df$Track <- trimws(all_audio_features_df$Track)
 all_audio_features_df$Track <- gsub("\\s*\\(REMASTERED\\)", "", all_audio_features_df$Track)
 all_audio_features_df[5,]$Track <- "(Anesthesia) – Pulling Teeth"
 
-# creating new columns with NA values in df
-df$Key <- NA
-df$Mode <- NA
-df$Loudness <- NA
-df$Tempo <- NA
-
-df$Acousticness <- NA
-df$Danceability <- NA
-df$Energy <- NA
-df$Instrumentalness <- NA
-df$Liveness <- NA
-df$Speechiness <- NA
-df$Valence <- NA
-
 songs <- all_audio_features_df$Track
 songs
 
@@ -1961,7 +2312,6 @@ for (i in 1:length(all_audio_features_df$id)) {
   df[indeks,]$Valence <- all_audio_features_df[i,]$valence
   
 }
-
 
 
 
@@ -2029,7 +2379,7 @@ song_data <- data.frame(
 # extract attributes for every song
 for(i in 1:length(all_songs_links)){
   # loading content page
-  song_page_html <- read_html(all_songs_links[i])
+  song_page_html <- read_html(paste(all_songs_links[i], "/attributes", sep = ""))
   
   # retrieving song title
   song_title <- ""
@@ -2045,7 +2395,7 @@ for(i in 1:length(all_songs_links)){
   
   # adding Genres -------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_genres div.middle") %>%
+    html_nodes("div.attribute-tab-genres div.middle") %>%
     head(1)
   
   attribute <- tab %>%
@@ -2057,9 +2407,10 @@ for(i in 1:length(all_songs_links)){
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Genres <- cleaned_string
   
+  
   # adding Styles --------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_styles div.middle") %>%
+    html_nodes("div.attribute-tab-styles div.middle") %>%
     head(1)
   
   attribute <- tab %>%
@@ -2071,30 +2422,35 @@ for(i in 1:length(all_songs_links)){
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Styles <- cleaned_string
   
+  
   # adding Moods ---------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_moods div.middle") %>%
+    html_nodes("div.attribute-tab-moods div.middle") %>%
     head(1)
   
   attribute <- tab %>%
     html_nodes("a") %>% html_text()
+  attribute
   
   # clean the string attribute containing moods
   cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Moods <- cleaned_string
   
+  
   # adding Themes -------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_themes div.middle") %>%
+    html_nodes("div.attribute-tab-themes div.middle") %>%
     head(1)
   
   attribute <- tab %>%
     html_nodes("a") %>% html_text()
+  attribute
   
   # clean the string attribute containing themes
   cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
   cleaned_string <- paste(cleaned_string, collapse = ", ")
+  cleaned_string
   song_data[i,]$Themes <- cleaned_string
   
 }
@@ -2105,17 +2461,35 @@ song_data$Genres[song_data$Genres == ""] <- NA
 song_data$Moods[song_data$Moods == ""] <- NA
 song_data$Themes[song_data$Themes == ""] <- NA
 
-song_data <- song_data[complete.cases(song_data$Genres),]
 
 # extract the rows with values in Styles, Genres, Themes or Moods
 song_data <- song_data[apply(song_data[, c("Styles", "Genres", "Themes", "Moods")], 1, function(x) any(!is.na(x))), ]
 
-# remove duplicates
+# format Song_Title column so that names match
+song_data$Song_Title <- trimws(song_data$Song_Title)
+song_data$Song_Title <- str_to_title(song_data$Song_Title)
+df$Song_Title <- str_to_title(df$Song_Title)
+df$Song_Title <- trimws(df$Song_Title)
+
+song_data[song_data$Song_Title == '(Anesthesia) Pulling Teeth',]$Song_Title <- '(Anesthesia) – Pulling Teeth'
+song_data[song_data$Song_Title == 'Die Die My Darling',]$Song_Title <- 'Die, Die My Darling'
+song_data[song_data$Song_Title == 'So What',]$Song_Title <- 'So What?'
+
+song_data <- song_data[!(song_data$Song_Title == "Blackened" & is.na(song_data$Genres)), ]
+song_data <- song_data[!(song_data$Song_Title == "Blitzkrieg" & is.na(song_data$Genres)), ]
+song_data <- song_data[!(song_data$Song_Title == "The Four Horsemen" & is.na(song_data$Genres)), ]
+song_data <- song_data[!(song_data$Song_Title == "Through The Never" & is.na(song_data$Genres)), ]
+
+# remove duplicates from song_data
 duplicates <- duplicated(song_data$Song_Title)
 song_data <- song_data[!duplicates, ]
 
 # add Genres, Styles, Moods and Themes to df
 df <- left_join(df, song_data, by = "Song_Title")
+
+# remove duplicates df
+duplicates <- duplicated(df$Song_Title)
+df <- df[!duplicates, ]
 
 
 
@@ -2793,8 +3167,27 @@ scorpions$Band <- 'Scorpions'
 # arrange columns order
 scorpions <- scorpions[,c(2,8,5,6,7,3,1,4)]
 
+# remove white space on ends in column Song_Title
+scorpions$Song_Title <- trimws(scorpions$Song_Title)
+
 # remove duplicates
-scorpions <- scorpions[!duplicated(scorpions$Song_Title), ]
+duplicates <- duplicated(scorpions$Song_Title)
+scorpions <- scorpions[!duplicates, ]
+
+# sort by Song_Title
+scorpions <- scorpions %>% arrange(Song_Title)
+
+# delete invalid songs
+scorpions[c(45,74,90,93),]$Song_Title <- NA
+scorpions <- scorpions[complete.cases(scorpions$Song_Title),]
+
+# change song name
+scorpions[scorpions$Song_Title == 'Kōjō no Tsuki',]$Song_Title <- 'Kojo No Tsuki'
+
+# remove "." from column Track Number
+scorpions$Track_Number <- gsub("\\.", "", scorpions$Track_Number)
+
+
 
 
 
@@ -2837,8 +3230,118 @@ Sys.setenv(SPOTIFY_CLIENT_SECRET = "058710aee06347fea415a46f5f2bc883")
 # generate access token
 access_token <- get_spotify_access_token()
 
-# playlist url
-playlist_url <- "https://open.spotify.com/playlist/6bHJ8KMRt1i43XdSglObfO"
+
+# creating new columns with NA values in scorpions
+scorpions$Key <- NA
+scorpions$Mode <- NA
+scorpions$Loudness <- NA
+scorpions$Tempo <- NA
+
+scorpions$Acousticness <- NA
+scorpions$Danceability <- NA
+scorpions$Energy <- NA
+scorpions$Instrumentalness <- NA
+scorpions$Liveness <- NA
+scorpions$Speechiness <- NA
+scorpions$Valence <- NA
+
+
+playlist_urls <- c("https://open.spotify.com/playlist/0kKYuTDVGFJ6h95Rvouok0",
+                   "https://open.spotify.com/playlist/6bHJ8KMRt1i43XdSglObfO")
+
+
+for(j in 1:length(playlist_urls)){
+  
+  playlist_url <- playlist_urls[j]
+  
+  # extract playlist ID from playlist url
+  playlist_id <- sub("^.+/([[:alnum:]]+)$", "\\1", playlist_url)
+  
+  # initialize an empty data frame to store all tracks from the playlist
+  all_tracks <- NULL
+  
+  # set the starting offset
+  offset <- 0
+  # set the number of tracks to be fetched in a single API call
+  limit <- 50
+  
+  # a repeat loop to fetch tracks page by page 
+  repeat {
+    tracks <- get_playlist_tracks(playlist_id, limit = limit, offset = offset)
+    
+    # loop exit condition
+    if (length(tracks) == 0) {
+      break
+    }
+    
+    tracks_scorpions <- as.data.frame(tracks)
+    all_tracks <- bind_rows(all_tracks, tracks_scorpions)
+    
+    # update the offset to fetch the next page
+    offset <- offset + limit
+  }
+  
+  # extracting track IDs and track names from the 'all_tracks'
+  track_ids <- all_tracks$track.id
+  track_name <- all_tracks$track.name
+  
+  # create an empty list to store audio features for all tracks
+  all_audio_features <- list()
+  
+  # iterating through each track ID to fetch audio features
+  for (track_id in track_ids) {
+    
+    audio_feature <- get_track_audio_features(track_id)
+    
+    track <- get_track(track_id)
+    track_name <- track$name
+    
+    audio_feature$Track_ID <- track_id
+    audio_feature$Track <- track_name
+    all_audio_features[[track_id]] <- audio_feature
+  }
+  
+  
+  all_audio_features_scorpions <- do.call(rbind, all_audio_features)
+  
+  # adding a new column Row to the all_audio_features_scorpions
+  all_audio_features_scorpions$Row <- seq_len(nrow(all_audio_features_scorpions))
+  
+  # cleaning Track column
+  all_audio_features_scorpions$Track <- str_to_upper(all_audio_features_scorpions$Track)
+  all_audio_features_scorpions$Track <- sub(" -.*", "", all_audio_features_scorpions$Track)
+  all_audio_features_scorpions$Track <- trimws(all_audio_features_scorpions$Track)
+  
+  
+  songs <- all_audio_features_scorpions$Track
+  
+  # looping through each song and adding attributes to that song in scorpions
+  for (i in 1:length(all_audio_features_scorpions$id)) {
+    
+    #f inding the row index in the main data frame scorpions based on song title
+    indeks <- which(str_to_upper(trimws(scorpions$Song_Title)) == songs[i])
+    
+    scorpions[indeks,]$Key <- all_audio_features_scorpions[i,]$key
+    scorpions[indeks,]$Mode <- all_audio_features_scorpions[i,]$mode
+    scorpions[indeks,]$Loudness <- all_audio_features_scorpions[i,]$loudness
+    scorpions[indeks,]$Tempo <- all_audio_features_scorpions[i,]$tempo
+    
+    scorpions[indeks,]$Acousticness <- all_audio_features_scorpions[i,]$acousticness
+    scorpions[indeks,]$Danceability <- all_audio_features_scorpions[i,]$danceability
+    scorpions[indeks,]$Energy <- all_audio_features_scorpions[i,]$energy
+    scorpions[indeks,]$Instrumentalness <- all_audio_features_scorpions[i,]$instrumentalness
+    scorpions[indeks,]$Liveness <- all_audio_features_scorpions[i,]$liveness
+    scorpions[indeks,]$Speechiness <- all_audio_features_scorpions[i,]$speechiness
+    scorpions[indeks,]$Valence <- all_audio_features_scorpions[i,]$valence
+    
+  }
+  
+}
+
+
+# url for album Rock Believer
+playlist_url <- 'https://open.spotify.com/album/3buy6DvCMUseqKyEC4RI4g'
+
 
 # extract playlist ID from playlist url
 playlist_id <- sub("^.+/([[:alnum:]]+)$", "\\1", playlist_url)
@@ -2852,8 +3355,17 @@ offset <- 0
 limit <- 50
 
 # a repeat loop to fetch tracks page by page 
+
+all_tracks <- NULL
+
+# set the starting offset
+offset <- 0
+# set the number of tracks to be fetched in a single API call
+limit <- 50
+
+# a repeat loop to fetch tracks page by page 
 repeat {
-  tracks <- get_playlist_tracks(playlist_id, limit = limit, offset = offset)
+  tracks <- get_album_tracks(playlist_id, limit = limit, offset = offset)
   
   # loop exit condition
   if (length(tracks) == 0) {
@@ -2867,9 +3379,12 @@ repeat {
   offset <- offset + limit
 }
 
+
+
 # extracting track IDs and track names from the 'all_tracks'
-track_ids <- all_tracks$track.id
-track_name <- all_tracks$track.name
+track_ids <- all_tracks$id
+track_name <- all_tracks$name
+
 
 # create an empty list to store audio features for all tracks
 all_audio_features <- list()
@@ -2898,23 +3413,10 @@ all_audio_features_scorpions$Track <- str_to_upper(all_audio_features_scorpions$
 all_audio_features_scorpions$Track <- sub(" -.*", "", all_audio_features_scorpions$Track)
 all_audio_features_scorpions$Track <- trimws(all_audio_features_scorpions$Track)
 
-# creating new columns with NA values in scorpions
-scorpions$Key <- NA
-scorpions$Mode <- NA
-scorpions$Loudness <- NA
-scorpions$Tempo <- NA
-
-scorpions$Acousticness <- NA
-scorpions$Danceability <- NA
-scorpions$Energy <- NA
-scorpions$Instrumentalness <- NA
-scorpions$Liveness <- NA
-scorpions$Speechiness <- NA
-scorpions$Valence <- NA
 
 songs <- all_audio_features_scorpions$Track
 
-# looping through each song and adding attributes to that song in scorpions
+# ooping through each song and adding attributes to that song in scorpions
 for (i in 1:length(all_audio_features_scorpions$id)) {
   
   #f inding the row index in the main data frame scorpions based on song title
@@ -2934,6 +3436,9 @@ for (i in 1:length(all_audio_features_scorpions$id)) {
   scorpions[indeks,]$Valence <- all_audio_features_scorpions[i,]$valence
   
 }
+
+
+sum(is.na(scorpions$Acousticness))
 
 ########################################################################################
 # Add data about genres, styles, moods and themes
@@ -2997,8 +3502,8 @@ song_data <- data.frame(
 
 # extract attributes for every song
 for(i in 1:length(all_songs_links)){
-  # loading content page
-  song_page_html <- read_html(all_songs_links[i])
+  
+  song_page_html <- read_html(paste(all_songs_links[i], "/attributes", sep = ""))
   
   # retrieving song title
   song_title <- ""
@@ -3014,7 +3519,7 @@ for(i in 1:length(all_songs_links)){
   
   # adding Genres -------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_genres div.middle") %>%
+    html_nodes("div.attribute-tab-genres div.middle") %>%
     head(1)
   
   attribute <- tab %>%
@@ -3026,9 +3531,10 @@ for(i in 1:length(all_songs_links)){
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Genres <- cleaned_string
   
+  
   # adding Styles --------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_styles div.middle") %>%
+    html_nodes("div.attribute-tab-styles div.middle") %>%
     head(1)
   
   attribute <- tab %>%
@@ -3040,31 +3546,37 @@ for(i in 1:length(all_songs_links)){
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Styles <- cleaned_string
   
+  
   # adding Moods ---------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_moods div.middle") %>%
+    html_nodes("div.attribute-tab-moods div.middle") %>%
     head(1)
   
   attribute <- tab %>%
     html_nodes("a") %>% html_text()
+  attribute
   
   # clean the string attribute containing moods
   cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
   cleaned_string <- paste(cleaned_string, collapse = ", ")
   song_data[i,]$Moods <- cleaned_string
   
+  
   # adding Themes -------------------------------------------------------
   tab <- song_page_html %>%
-    html_nodes("div.song_themes div.middle") %>%
+    html_nodes("div.attribute-tab-themes div.middle") %>%
     head(1)
   
   attribute <- tab %>%
     html_nodes("a") %>% html_text()
+  attribute
   
   # clean the string attribute containing themes
   cleaned_string <- gsub("\"|\\s*\\(\\d+\\)", "", attribute, perl = TRUE)
   cleaned_string <- paste(cleaned_string, collapse = ", ")
+  cleaned_string
   song_data[i,]$Themes <- cleaned_string
+  
   
 }
 
@@ -3074,18 +3586,41 @@ song_data$Genres[song_data$Genres == ""] <- NA
 song_data$Moods[song_data$Moods == ""] <- NA
 song_data$Themes[song_data$Themes == ""] <- NA
 
-song_data <- song_data[complete.cases(song_data$Genres),]
 
-# extract the rows with values in Styles, Genres, Themes or Moods
+# extract rows with values in Styles, Genres, Themes, Moods
 song_data <- song_data[apply(song_data[, c("Styles", "Genres", "Themes", "Moods")], 1, function(x) any(!is.na(x))), ]
+
+# remove extra space from Song_Title 
+song_data$Song_Title <- trimws(song_data$Song_Title)
+scorpions$Song_Title <- trimws(scorpions$Song_Title)
+
+# format Song_Titles so that names match
+scorpions$Song_Title <- str_to_title(scorpions$Song_Title)
+song_data$Song_Title <- str_to_title(song_data$Song_Title)
+
+
+song_data[7,] <- NA
+song_data <- song_data[complete.cases(song_data$Song_Title),]
+
+song_data <- song_data[!(song_data$Song_Title == "Taxman Woman" & is.na(song_data$Moods)), ]
+song_data <- song_data[!(song_data$Song_Title == "Love Will Keep Us Alive Again" & is.na(song_data$Genres)), ]
+
 
 # remove duplicates
 duplicates <- duplicated(song_data$Song_Title)
 song_data <- song_data[!duplicates, ]
 
-# add Genres, Styles, Moods and Themes to scorpions
+song_data[song_data$Song_Title == "He's A Woman, She's A Man",]$Song_Title <- "He's A Woman – She's A Man"
+song_data[song_data$Song_Title == 'Love Will Keep Us Alive Again',]$Song_Title <- 'Love Will Keep Us Alive'
+song_data[song_data$Song_Title == 'Oh Girl (I Wanna Be With You)',]$Song_Title <- 'Oh Girl'
+song_data[song_data$Song_Title == 'We Let It Rock...You Let It Roll',]$Song_Title <- 'We Let It Rock... You Let It Roll'
+
+
 scorpions <- left_join(scorpions, song_data, by = "Song_Title")
 
+
+duplicates <- duplicated(scorpions$Song_Title)
+scorpions <- scorpions[!duplicates, ]
 
 
 ########################################################################################
@@ -3337,3 +3872,5 @@ hard_rock <- rbind(hard_rock, scorpions)
 
 # save data frame df in .csv file
 write.csv(hard_rock, file = "hard_rock.csv", row.names = F)
+
+
